@@ -258,8 +258,10 @@ app.post('/api/sessions/:id/etab', async (req, res) => {
 // la session, sans dupliquer ceux déjà présents dans le plan.
 app.post('/api/sessions/:id/refresh-drive', async (req, res) => {
   try {
+    const avant = (await store.load(req.params.id))?.photos?.length || 0;
     const session = await workplan.refreshFromDrive({ sessionId: req.params.id });
-    res.json(publicSession(session));
+    const ajoutees = (session.photos || []).length - avant;
+    res.json({ ...publicSession(session), _nouvellesPhotos: ajoutees });
   } catch (e) {
     res.status(400).json({ error: msg(e) });
   }

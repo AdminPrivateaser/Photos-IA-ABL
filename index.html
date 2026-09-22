@@ -833,10 +833,9 @@
       $('listRows').innerHTML = '<div class="card"><p class="sub" style="margin:0">Aucune session pour le moment.</p></div>';
       return;
     }
-    const total = sessions.reduce((n, s) => n + (s.cost || 0), 0);
     $('listMeta').innerHTML =
       `<b>${sessions.length}</b> session${sessions.length > 1 ? 's' : ''} · ` +
-      `coût cumulé <b>${total.toFixed(2)} $</b> · images conservées 14 jours, historique 90 jours`;
+      `images conservées 14 jours, historique 90 jours`;
 
     // Regroupement par personne, la plus récemment active en premier.
     const parPers = new Map();
@@ -849,12 +848,11 @@
       String(b[1][0].updatedAt).localeCompare(String(a[1][0].updatedAt)));
 
     $('listRows').innerHTML = groupes.map(([pers, liste]) => {
-      const coutPers = liste.reduce((n, s) => n + (s.cost || 0), 0);
       return `<div class="pers">
         <div class="pershead">
           <b>${esc(pers)}</b>
           ${pers === moi ? '<span class="moi">toi</span>' : ''}
-          <span class="tot">${liste.length} session${liste.length > 1 ? 's' : ''} · ${coutPers.toFixed(2)} $</span>
+          <span class="tot">${liste.length} session${liste.length > 1 ? 's' : ''}</span>
         </div>
         ${liste.map(ligneSession).join('')}
       </div>`;
@@ -879,7 +877,6 @@
       `${s.count} élément${s.count > 1 ? 's' : ''}`,
       s.videos ? `${s.videos} vidéo${s.videos > 1 ? 's' : ''}` : '',
       s.styleLabel || 'aucune retouche',
-      s.cost ? `${s.cost.toFixed(2)} $` : 'gratuit',
     ].filter(Boolean).join(' · ');
 
     // Une session dont les images ont été purgées ne peut plus être reprise :
@@ -996,7 +993,7 @@
 
     const etabTxt = s.etab ? `${esc(s.etab.id)} - ${esc(s.etab.nom)}` : 'non défini';
     const ajouterBtn = s.mode === 'drive'
-      ? `<button class="mini" id="btnRefreshDrive" type="button">Actualiser depuis Drive</button>`
+      ? `<button class="mini" id="btnRefreshDrive" type="button">+ Récupérer les nouvelles photos du dossier</button>`
       : `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter des médias</button>`;
 
     box.innerHTML = `
@@ -1005,6 +1002,7 @@
         <button class="mini" id="btnEtabModifier" type="button">modifier</button>
         ${ajouterBtn}
       </div>
+      ${s.mode === 'drive' ? '<p class="hint" style="margin:6px 0 0">As-tu déposé de nouvelles photos dans le dossier Drive de départ après avoir lancé cette session ? Ce bouton va les chercher et les ajoute ici, sans perdre ce qui est déjà en cours.</p>' : ''}
       <div id="etabModifierForm" style="display:none;margin-top:10px;max-width:340px">
         <label for="etabEditId">ID</label>
         <input type="text" id="etabEditId" value="${s.etab ? esc(s.etab.id) : ''}" />
@@ -1035,14 +1033,19 @@
       $('btnRefreshDrive').addEventListener('click', async () => {
         const b = $('btnRefreshDrive');
         b.disabled = true;
-        b.textContent = 'Actualisation…';
+        b.textContent = 'Recherche des nouvelles photos…';
         try {
-          session = await api(`/api/sessions/${s.id}/refresh-drive`, { method: 'POST' });
+          const d = await api(`/api/sessions/${s.id}/refresh-drive`, { method: 'POST' });
+          const n = d._nouvellesPhotos || 0;
+          session = d;
           render();
+          showErr('planErr', n > 0
+            ? `${n} nouvelle${n > 1 ? 's' : ''} photo${n > 1 ? 's' : ''} récupérée${n > 1 ? 's' : ''}.`
+            : "Aucune nouvelle photo dans le dossier Drive.");
         } catch (e) {
           showErr('planErr', e.message);
           b.disabled = false;
-          b.textContent = 'Actualiser depuis Drive';
+          b.textContent = '+ Récupérer les nouvelles photos du dossier';
         }
       });
     } else {
@@ -1067,7 +1070,6 @@
   function render() {
     const ps = photos();
     const pretes = ps.filter((p) => p.status === 'ok' && !p.busy).length;
-    const cout = session.cost || 0;
 
     $('planTitle').textContent = (session.source && session.source.folderName) || 'Plan de travail';
     // Ce que la validation enverra : les retouches d'une photo, ou son
@@ -1075,7 +1077,6 @@
     const aEnvoyer = compterALivrer(ps);
     $('planMeta').innerHTML = [
       `<span><b>${aEnvoyer}</b> fichier${aEnvoyer > 1 ? 's' : ''} à envoyer</span>`,
-      `<span>coût <b>${cout.toFixed(2)} $</b></span>`,
       session.status === 'running' ? '<span>génération en cours…</span>' : '',
     ].filter(Boolean).join('');
 
@@ -1316,7 +1317,6 @@
       ${fmt ? `<span>${fmt}${dims ? ' ' + dims : ''}</span>` : ''}
       ${!isNeutral(p.adjust) ? '<span class="tg">colorimétrie</span>' : ''}
       ${cur && cur.lumFinal != null ? `<span>lum. ${cur.lumFinal}/100</span>` : ''}
-      ${cur && cur.cost ? `<span>${cur.cost.toFixed(2)} $</span>` : ''}
       ${(p.renders || []).length > 1 ? `<span>${(p.renders || []).length} rendus</span>` : ''}
     </div>`;
 
@@ -1455,7 +1455,6 @@
       i >= 0 ? `${i + 1} / ${ordre.length}` : '',
       cur ? esc(cur.promptLabel) : 'aucune retouche',
       cur && cur.ext ? cur.ext.toUpperCase() + (cur.largeur ? ` ${cur.largeur}×${cur.hauteur}` : '') : '',
-      cur && cur.cost ? `${cur.cost.toFixed(2)} $` : '',
       selected.has(p.id) ? 'sélectionnée' : '',
     ].filter(Boolean).join(' · ');
     $('dPrev').disabled = i <= 0;
