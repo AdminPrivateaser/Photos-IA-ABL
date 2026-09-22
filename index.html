@@ -1,0 +1,1872 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contenus — Joy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --inkblue: #2d1eaf; --inkblue-2: #3226C0; --orange: #ff6b1a;
+      --ink: #15132b; --muted: #6b6880; --line: #e7e5f1; --bg: #f6f5fb;
+      --ok: #1f9d6b; --err: #d4453b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; padding: 32px 16px 40px; }
+    .wrap { width: 100%; max-width: 620px; margin: 0 auto; }
+    .wrap.plan { max-width: 1180px; }
+    .brand { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -0.02em; color: var(--inkblue); font-size: 15px; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+    .brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--orange); }
+    .brand .grow { flex: 1; }
+    .who { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .who a { color: var(--muted); text-decoration: underline; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 1px 2px rgba(21,19,43,.04); }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: -0.02em; margin: 0 0 6px; }
+    h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; margin: 0; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+    .step { font-family: 'Space Grotesk', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--inkblue); margin: 26px 0 10px; display: flex; align-items: center; gap: 8px; }
+    .step::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+    label { display: block; font-weight: 600; font-size: 13px; margin: 0 0 6px; }
+    .hint { color: var(--muted); font-size: 12px; margin: -2px 0 10px; }
+    input[type="url"], input[type="text"], select, textarea { width: 100%; padding: 11px 13px; font-size: 14px; font-family: inherit; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); margin-bottom: 14px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--inkblue); box-shadow: 0 0 0 3px rgba(45,30,175,.10); }
+    button { font-family: inherit; cursor: pointer; }
+    button.go { width: 100%; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; background: var(--inkblue); border: 0; border-radius: 10px; margin-top: 6px; }
+    button.go:hover:not(:disabled) { background: var(--inkblue-2); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .upbar { display: none; height: 6px; border-radius: 999px; background: #e4e0f7; margin-top: 12px; overflow: hidden; }
+    .upbar.show { display: block; }
+    .upbar i { display: block; height: 100%; width: 0; background: var(--inkblue); transition: width .2s; }
+    .errbox { margin-top: 16px; padding: 12px 14px; border-radius: 10px; font-size: 13px; background: #fdecea; border: 1px solid #f6c9c5; color: var(--err); display: none; }
+    .errbox.show { display: block; }
+    .styleWarn { display: none; margin: -4px 0 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px; background: #fff8e6; border: 1px solid #f2dfa8; color: #7a5b00; }
+    .screen { display: none; } .screen.active { display: block; }
+
+    /* Entrées : trois cartes cliquables, avec ce que chacune fait de la
+       destination écrit noir sur blanc. */
+    .entries { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .entry { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; text-align: left; }
+    .entry:hover:not(:disabled) { border-color: #c9c4e8; }
+    .entry:disabled { opacity: .5; cursor: not-allowed; }
+    .entry:disabled .ico { background: #eeecf5; color: var(--muted); }
+    .entry.on { border-color: var(--inkblue); background: #f6f4fe; box-shadow: 0 0 0 2px rgba(45,30,175,.12); }
+    .entry .ico { flex: none; width: 34px; height: 34px; border-radius: 9px; background: #f1eefb; color: var(--inkblue); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .entry.on .ico { background: var(--inkblue); color: #fff; }
+    .entry b { display: block; font-size: 14px; font-weight: 600; }
+    .entry i { font-style: normal; color: var(--muted); font-size: 12px; }
+    .panel { display: none; } .panel.on { display: block; }
+
+    #dropzone { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 10px; }
+    #dropzone.hover { border-color: var(--inkblue); background: #f1eefb; color: var(--inkblue); }
+    .filelist { font-size: 13px; margin-bottom: 12px; max-height: 150px; overflow: auto; }
+    .filelist div { padding: 5px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+    .filelist span { color: var(--muted); flex: none; }
+
+    /* Établissement : recherche puis puce de confirmation */
+    button.ghost.wide { width: 100%; padding: 11px; margin-bottom: 14px; }
+    .post { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #fff; }
+    .posthead { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .posthead .src { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: #f1eefb; color: var(--inkblue); }
+    .posthead .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .posthead button { border: 0; background: none; color: var(--inkblue); font-size: 12px; font-weight: 600; text-decoration: underline; }
+    .posterr { font-size: 12.5px; color: var(--err); background: #fdecea; border: 1px solid #f6c9c5; border-radius: 8px; padding: 9px 11px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+    .mtile { position: relative; border: 2px solid var(--line); border-radius: 9px; overflow: hidden; cursor: pointer; background: var(--bg); padding: 0; aspect-ratio: 1; }
+    .mtile.on { border-color: var(--inkblue); box-shadow: 0 0 0 2px rgba(45,30,175,.18); }
+    .mtile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .mtile .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px; background: #1c1a2e; color: #cfcbe6; }
+    .mtile .badge { position: absolute; left: 4px; bottom: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: rgba(21,19,43,.78); color: #fff; }
+    .mtile .tick { position: absolute; right: 4px; top: 4px; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 1px solid var(--line); color: transparent; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .mtile.on .tick { background: var(--inkblue); border-color: var(--inkblue); color: #fff; }
+    .mwarn { font-size: 11px; color: #7a5b00; margin-top: 7px; }
+    .results { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: -6px 0 14px; }
+    .results button { display: block; width: 100%; text-align: left; padding: 10px 13px; border: 0; background: #fff; font-size: 13px; }
+    .results button:hover { background: #f6f4fe; }
+    .results button + button { border-top: 1px solid var(--line); }
+    .chosen { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 10px; background: #eaf7f1; border: 1px solid #b9e3d0; font-size: 13px; margin-bottom: 14px; }
+    .chosen b { font-weight: 600; }
+    .chosen button { margin-left: auto; border: 0; background: none; color: #12694a; font-size: 12px; font-weight: 600; text-decoration: underline; }
+    .dest { padding: 11px 13px; border-radius: 10px; background: #f1eefb; font-size: 12.5px; color: #3a2f7a; margin-bottom: 4px; }
+    .dest code { font-family: ui-monospace, monospace; font-size: 12px; }
+
+    .planhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .meta { color: var(--muted); font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 8px; }
+    .meta b { color: var(--ink); font-weight: 600; }
+    .destline { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+    .destline b { color: var(--ink); font-weight: 600; }
+    button.validate { padding: 11px 20px; font-size: 14px; font-weight: 600; color: #fff; background: var(--ok); border: 0; border-radius: 10px; white-space: nowrap; }
+    .valbox { display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; font-size: 13px; background: #eaf7f1; border: 1px solid #b9e3d0; color: #12694a; }
+    .valbox.show { display: block; }
+    .bar { display: block; height: 5px; border-radius: 999px; background: #cdeadd; margin-top: 8px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .3s; }
+
+    /* Sessions : un bloc par personne, ses sessions dedans. */
+    .pers { margin-bottom: 22px; }
+    .pershead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 9px; }
+    .pershead b { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px; }
+    .pershead .moi { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 6px; border-radius: 5px; background: #f1eefb; color: var(--inkblue); }
+    .pershead span.tot { font-size: 12px; color: var(--muted); margin-left: auto; }
+    .sess { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+    .sess .nom { font-weight: 600; font-size: 14px; }
+    .sess .det { font-size: 12px; color: var(--muted); }
+    .sess .grow { flex: 1; }
+    .etat { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 7px; border-radius: 5px; }
+    .etat.ready { background: #fff4e6; color: #a8480a; }
+    .etat.running { background: #f1eefb; color: var(--inkblue); }
+    .etat.validated { background: #eaf7f1; color: #12694a; }
+    .etat.failed { background: #fdecea; color: var(--err); }
+    .sess button { border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 7px 13px; font-size: 13px; font-weight: 600; color: var(--inkblue); }
+    .sess button:hover { border-color: var(--inkblue); background: #f6f4fe; }
+    .row { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
+    .rowtop { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .fname { font-weight: 600; font-size: 14px; }
+    .chain { color: var(--muted); font-size: 12px; }
+
+    /* --- Vue en grille : le tri ------------------------------------------ */
+    .gtools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    .gtools .cnt { font-size: 14px; font-weight: 600; }
+    .gtools .tot { font-size: 13px; color: var(--muted); margin-left: auto; }
+    .mini { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 5px 11px; font-size: 13px; font-weight: 600; color: var(--muted); }
+    .mini:hover:not(:disabled) { border-color: var(--inkblue); color: var(--inkblue); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .flab { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 4px; }
+    .chip2 { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .chip2.on { border-color: var(--inkblue); background: #f1eefb; color: var(--inkblue); }
+
+    /* Barre collante en haut : une barre flottante en bas passait inapercue,
+       se faisait recouvrir par la vue de detail, et ne disait pas qu'il faut
+       d'abord selectionner. */
+    .topbar { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 12px 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+    .tbrow { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+    .tbrow .cnt { font-size: 14px; font-weight: 600; align-self: center; }
+    .tbrow .grow { flex: 1; }
+    .topbar select { margin: 0; }
+    .topbar .field label { margin-bottom: 4px; font-size: 12px; }
+    .tbnote { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+    .tbnote b { color: var(--ink); font-weight: 600; }
+
+    /* Une ligne par photo, bande horizontale des versions, defilement a droite. */
+    .row2 { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
+    .rtop { display: flex; align-items: baseline; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .rtop .nom { font-weight: 600; font-size: 14px; }
+    .rtop .det { font-size: 12px; color: var(--muted); }
+    .rtop .grow { flex: 1; }
+    .strip { display: flex; overflow-x: auto; scroll-snap-type: x proximity; scroll-behavior: smooth; }
+    .pane { flex: 0 0 50%; min-width: 300px; padding: 12px; scroll-snap-align: start; }
+    .pane + .pane { border-left: 1px solid var(--line); }
+    .pane.src { background: #fbfaff; }
+    .pane.seul { flex: 0 0 50%; }
+    .pane.sel { background: #f4f2fd; box-shadow: inset 0 0 0 2px var(--inkblue); border-radius: 10px; }
+    .pane.bad { background: #fefaf9; }
+    .phead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 24px; }
+    .phead input[type="checkbox"] { accent-color: var(--inkblue); width: 16px; height: 16px; margin: 0; flex: none; }
+    .plab { font-size: 11px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plab.new { color: var(--inkblue); }
+    .phead .grow { flex: 1; }
+    .picon { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 7px; padding: 3px 8px; font-size: 12px; line-height: 1.3; }
+    .picon:hover { border-color: var(--inkblue); color: var(--inkblue); }
+    .picon.x:hover { border-color: var(--err); color: var(--err); }
+    .pane img { width: 100%; display: block; border-radius: 9px; background: var(--bg); aspect-ratio: 4/3; object-fit: cover; }
+    .pane .vide2 { width: 100%; aspect-ratio: 4/3; border-radius: 9px; background: var(--bg); display: flex; align-items: center; justify-content: center; text-align: center; padding: 14px; font-size: 12px; color: var(--muted); }
+    .pane .vide2.wait { background: #edecf4; color: var(--inkblue); font-weight: 600; font-size: 13px; }
+    .pane .vide2.vid { background: #1c1a2e; color: #cfcbe6; flex-direction: column; gap: 6px; }
+    .pstats { font-size: 11px; color: var(--muted); margin-top: 7px; display: flex; gap: 9px; flex-wrap: wrap; }
+    .pstats .tg { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 6px; border-radius: 4px; background: #f1eefb; color: var(--inkblue); }
+
+    .grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .tile { position: relative; aspect-ratio: 1; border-radius: 11px; border: 2px solid var(--line); background: var(--bg); overflow: hidden; cursor: pointer; padding: 0; }
+    .tile:hover { border-color: #c9c4e8; }
+    .tile.on { border-color: var(--inkblue); box-shadow: 0 0 0 3px rgba(45,30,175,.14); }
+    .tile.bad { border-color: #f6c9c5; }
+    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); text-align: center; padding: 10px; }
+    .tile .ph.vid { background: #1c1a2e; color: #cfcbe6; }
+    .tile .ph.wait { color: var(--inkblue); font-weight: 600; }
+    .tick { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.92); color: transparent; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .tile.on .tick { background: var(--inkblue); border-color: var(--inkblue); color: #fff; }
+    .tag2 { position: absolute; bottom: 6px; left: 6px; display: flex; gap: 4px; flex-wrap: wrap; max-width: calc(100% - 12px); }
+    .tag2 span { font-size: 10px; font-weight: 700; letter-spacing: .02em; padding: 2px 6px; border-radius: 4px; background: rgba(21,19,43,.78); color: #fff; }
+    .tag2 span.warn { background: #ffedd6; color: #a8480a; }
+    .tag2 span.err { background: #fdecea; color: var(--err); }
+    .loupe { position: absolute; bottom: 6px; right: 6px; width: 24px; height: 24px; border-radius: 7px; border: 0; background: rgba(255,255,255,.92); color: var(--inkblue); font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .loupe:hover { background: #fff; }
+    .tname { position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,.88); color: var(--ink); max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* --- Vue de détail : le travail --------------------------------------- */
+    .overlay { position: fixed; inset: 0; background: rgba(21,19,43,.55); display: none; z-index: 50; overflow: auto; padding: 24px 16px; }
+    .overlay.on { display: block; }
+    .dwrap { max-width: 1100px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; }
+    .dhead { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .dhead .nom { font-weight: 600; font-size: 15px; }
+    .dhead .det { font-size: 12px; color: var(--muted); }
+    .dhead .grow { flex: 1; }
+    /* Comparaison au glissement : un seul cadre, une poignee. Cote a cote,
+       l'oeil alterne au lieu de comparer. */
+    .cmp { position: relative; margin: 0 auto; max-width: 100%; user-select: none; touch-action: none; cursor: ew-resize; line-height: 0; }
+    /* La couche de BASE est l'avant : c'est elle qui fixe la taille de la
+       boite. L'apres est superpose dans la meme boite, en valeur absolue, et
+       rogne. Les deux couches ont donc exactement le meme cadre. */
+    .cmp .base { display: block; width: 100%; height: auto; max-height: 56vh; object-fit: contain; border-radius: 9px; background: var(--bg); }
+    .cmp .apres { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }
+    .cmp .poignee { position: absolute; top: 0; bottom: 0; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 0 1px rgba(21,19,43,.3), 0 0 8px rgba(21,19,43,.25); pointer-events: none; }
+    /* Bouton de prise large : 44 px, la taille minimale confortable au doigt
+       comme a la souris. L'ancien faisait 30 px sur une barre de 2 px. */
+    .cmp .poignee::after { content: '⇄'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--inkblue); font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(21,19,43,.35); }
+    .cmp.prise .poignee::after { transform: translate(-50%, -50%) scale(1.08); background: #f6f4fe; }
+    /* clip-path change a chaque image ecran : on l'annonce au navigateur et on
+       n'y met AUCUNE transition, sinon la couche traine derriere le pointeur. */
+    .cmp .apres { will-change: clip-path; transition: none; }
+    .cmp .etiq { position: absolute; top: 8px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; background: rgba(21,19,43,.72); color: #fff; }
+    .cmp .etiq.g { left: 8px; } .cmp .etiq.d { right: 8px; }
+    .cmpwrap { padding: 14px 18px; }
+    .cmpbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .cmpbar .lab { font-size: 12px; color: var(--muted); }
+
+    /* Bande des versions : defilement horizontal, comme avant, mais dans la
+       vue de travail et non dans la vue de tri. */
+    .vstrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; scroll-snap-type: x proximity; }
+    .vitem { flex: 0 0 108px; scroll-snap-align: start; border: 2px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--bg); padding: 0; cursor: pointer; position: relative; }
+    .vitem.on { border-color: var(--inkblue); box-shadow: 0 0 0 2px rgba(45,30,175,.15); }
+    .vitem img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+    .vitem .vl { display: block; font-size: 10px; font-weight: 600; padding: 4px 5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vitem.on .vl { color: var(--inkblue); }
+    .vitem .vph { aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); }
+
+    .dpair { display: grid; grid-template-columns: 1fr 1fr; }
+    .dcol { padding: 14px; }
+    .dcol + .dcol { border-left: 1px solid var(--line); }
+    .dlab { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .dcol img, .dcol canvas { width: 100%; display: block; border-radius: 9px; background: var(--bg); max-height: 52vh; object-fit: contain; }
+    .dcol .vide { aspect-ratio: 4/3; border-radius: 9px; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; text-align: center; padding: 14px; }
+    .dfoot { padding: 14px 18px; border-top: 1px solid var(--line); }
+    .versions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .versions .lab { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 4px; }
+    .versions button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 9px; font-size: 12px; color: var(--muted); }
+    .versions button.on { border-color: var(--inkblue); color: var(--inkblue); background: #f1eefb; font-weight: 600; }
+    .slider { display: grid; grid-template-columns: 90px 1fr 40px; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .slider label { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; }
+    .slider input[type="range"] { width: 100%; margin: 0; accent-color: var(--inkblue); }
+    .slider output { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+    .dactions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+    .dactions .grow { flex: 1; }
+    #dLibre textarea { margin: 0; resize: vertical; min-height: 56px; font-size: 13px; }
+    #dLibre input[type="text"] { margin: 0; min-width: 150px; }
+    .navbtn { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 11px; font-size: 13px; font-weight: 600; color: var(--muted); }
+    .navbtn:hover:not(:disabled) { border-color: var(--inkblue); color: var(--inkblue); }
+
+    /* --- Barre d'action ---------------------------------------------------- */
+    .abinner { max-width: 1180px; margin: 0 auto; display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+    .field { display: flex; flex-direction: column; }
+    .field label { margin-bottom: 5px; }
+    .field.wide { flex: 1; min-width: 300px; }
+    .topbar textarea { resize: vertical; min-height: 58px; font-size: 13px; margin: 0; }
+    .topbar input[type="text"] { margin: 0; }
+    button.act { padding: 11px 20px; font-size: 14px; font-weight: 600; border: 0; border-radius: 10px; color: #fff; background: var(--inkblue); }
+    button.act:hover:not(:disabled) { background: var(--inkblue-2); }
+    .abinner.libre { display: none; margin-top: 10px; }
+    .abinner.libre.on { display: flex; }
+    .abnote { font-size: 12px; color: var(--muted); max-width: 1180px; margin: 9px auto 0; }
+    .abnote b { color: var(--ink); font-weight: 600; }
+    @media (max-width: 760px) { .dpair { grid-template-columns: 1fr; } .dcol + .dcol { border-left: 0; border-top: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+
+<!-- ================= ÉCRAN 1 : d'où ça vient, où ça va ================= -->
+<div class="wrap" id="wSetup">
+  <div class="brand"><span class="dot"></span> Joy · Contenus
+    <span class="grow"></span><span class="who" id="who1"></span></div>
+  <div class="screen active card" id="scSetup">
+    <h1 id="setupTitle">Importer des contenus</h1>
+
+    <p class="sub" style="margin:0 0 20px"><a href="#" id="lienSessions">Voir les sessions de l'équipe</a></p>
+
+    <div class="step">1 · D'où viennent les contenus</div>
+    <div class="entries">
+      <button class="entry on" data-tab="drive">
+        <span class="ico">📁</span>
+        <span><b>Un dossier Drive</b><i>Shooting complet. Le résultat repart dans un sous-dossier de ce dossier.</i></span>
+      </button>
+      <button class="entry" data-tab="links">
+        <span class="ico">🔗</span>
+        <span><b>Des liens</b><i>Instagram, TikTok, Facebook, ou une image en ligne.</i></span>
+      </button>
+    </div>
+
+    <div class="panel on" id="pDrive">
+      <div class="step">2 · Le dossier</div>
+      <label for="driveUrl">Lien du dossier Drive</label>
+      <input id="driveUrl" type="url" placeholder="https://drive.google.com/drive/folders/..." />
+      <p class="hint">Le compte de service doit avoir accès à ce dossier.</p>
+    </div>
+
+    <div class="panel" id="pLinks">
+      <div class="step">2 · Les liens</div>
+      <label for="linksText">Un lien par ligne</label>
+      <textarea id="linksText" rows="4" placeholder="https://www.instagram.com/p/...&#10;https://www.tiktok.com/@compte/video/..."></textarea>
+      <p class="hint">Le post doit être public. Les vidéos sont importées telles quelles, sans retouche possible.</p>
+      <button class="ghost wide" id="btnPreview">Chercher les médias</button>
+      <div id="previewZone"></div>
+    </div>
+
+    <!-- Établissement : demandé seulement quand il n'y a pas de dossier de départ.
+         Obligatoire dans cette version (plus de repli en zip). -->
+    <div id="etabBlock" style="display:none">
+      <div class="step">3 · L'établissement de destination (obligatoire)</div>
+      <div id="etabChosen"></div>
+      <div id="etabSearchBlock">
+        <label for="etabQ">Chercher par ID ou par nom</label>
+        <input type="text" id="etabQ" placeholder="12345, ou Comptoir" autocomplete="off" />
+        <div id="etabResults"></div>
+        <p class="hint" id="etabCreerHint" style="display:none">
+          Établissement introuvable : renseigne son ID et son nom ci-dessous, le dossier
+          <code>ID - Nom</code> sera créé automatiquement dans Drive.
+        </p>
+        <div id="etabCreerBlock" style="display:none">
+          <label for="etabCreerId">ID de l'établissement</label>
+          <input type="text" id="etabCreerId" placeholder="78687" autocomplete="off" />
+          <label for="etabCreerNom">Nom de l'établissement</label>
+          <input type="text" id="etabCreerNom" placeholder="Le café du coin" autocomplete="off" />
+          <button class="ghost wide" id="etabCreerValider" type="button">Utiliser cet établissement</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dest" id="destPreview"></div>
+    <button class="go" id="start">Charger les photos</button>
+    <div class="errbox" id="setupErr"></div>
+  </div>
+</div>
+
+<!-- ================= ÉCRAN 1bis : les sessions de l'équipe ================= -->
+<div class="wrap plan screen" id="scList">
+  <div class="brand"><span class="dot"></span> Joy · Contenus
+    <span class="grow"></span><span class="who" id="who3"></span></div>
+  <div class="planhead">
+    <h2>Sessions de l'équipe</h2>
+    <button class="ghost" id="btnNouvelle">Nouvel import</button>
+  </div>
+  <p class="destline" id="listMeta"></p>
+  <input type="text" id="listQ" placeholder="Rechercher un shooting, un établissement, une personne…" style="max-width:420px" />
+  <div class="errbox" id="listErr"></div>
+  <div id="listRows"></div>
+</div>
+
+<!-- ================= ÉCRAN 2 : le plan de travail ================= -->
+<div class="wrap plan screen" id="scPlan">
+  <div class="brand"><span class="dot"></span> Joy · Contenus
+    <span class="grow"></span><span class="who" id="who2"></span></div>
+  <p class="sub" style="margin:0 0 14px"><a href="#" id="lienRetour">← Sessions de l'équipe</a></p>
+  <div class="planhead">
+    <h2 id="planTitle">Plan de travail</h2>
+    <button class="validate" id="validate">Valider et envoyer</button>
+  </div>
+  <div class="meta" id="planMeta"></div>
+  <p class="destline" id="destLine"></p>
+  <div id="etabEditBlock" style="margin:0 0 14px"></div>
+  <div class="valbox" id="valbox"></div>
+  <div class="errbox" id="planErr"></div>
+
+  <div class="topbar">
+    <div class="chips" id="gChips" style="margin-bottom:10px">
+      <span class="flab">Filtrer l'affichage</span>
+    </div>
+    <div class="tbrow">
+      <span class="cnt" id="gCount"></span>
+      <button class="mini" id="gAll">Tout</button>
+      <button class="mini" id="gNone">Aucune</button>
+      <span class="grow"></span>
+      <div class="field">
+        <label for="rStyle">Appliquer</label>
+        <select id="rStyle" style="min-width:220px"></select>
+      </div>
+      <button class="act" id="btnRun">Lancer</button>
+    </div>
+    <details id="reglagesAvances" style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--muted)">Réglages avancés</summary>
+      <div class="tbrow" style="margin-top:8px">
+        <div class="field">
+          <label for="rFrom">en partant de</label>
+          <select id="rFrom" style="min-width:150px">
+            <option value="current">l'image actuelle</option>
+            <option value="source">la photo d'origine</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rMode">et en</label>
+          <select id="rMode" style="min-width:175px">
+            <option value="duplicate">ajoutant une variante</option>
+            <option value="replace">remplaçant l'image actuelle</option>
+          </select>
+        </div>
+      </div>
+    </details>
+    <div class="abinner libre" id="fLibre" style="margin-top:10px">
+      <div class="field wide">
+        <label for="rPrompt">Ton prompt</label>
+        <textarea id="rPrompt" rows="2" placeholder="Décris la retouche voulue, en anglais de préférence."></textarea>
+      </div>
+      <div class="field">
+        <label for="rLabel">Nom court</label>
+        <input type="text" id="rLabel" placeholder="sans-dressage" maxlength="30" />
+      </div>
+    </div>
+    <p class="tbnote" id="abNote"></p>
+  </div>
+  <div id="grid"></div>
+</div>
+
+<!-- ================= Vue de détail ================= -->
+<div class="overlay" id="detail">
+  <div class="dwrap">
+    <div class="dhead">
+      <span class="nom" id="dNom"></span>
+      <span class="det" id="dDet"></span>
+      <span class="grow"></span>
+      <button class="navbtn" id="dPrev">← précédente</button>
+      <button class="navbtn" id="dNext">suivante →</button>
+      <button class="navbtn" id="dClose">Fermer</button>
+    </div>
+    <div class="cmpbar" style="padding:14px 18px 0">
+      <button class="mini" id="dModeGliss">Glissement</button>
+      <button class="mini" id="dModeCote">Côte à côte</button>
+      <span class="lab" id="dHint">Fais glisser la poignée. Touche B pour basculer avant/après.</span>
+    </div>
+    <div id="dVue"></div>
+    <div class="cmpwrap">
+      <div class="vstrip" id="dVersions"></div>
+    </div>
+    <div class="dfoot">
+      <div id="dSliders"></div>
+      <div class="dactions">
+        <button class="mini" id="dSave" disabled>Enregistrer les réglages</button>
+        <button class="mini" id="dReset">Réinitialiser</button>
+        <button class="mini" id="dBulk">Appliquer à la sélection</button>
+        <span class="grow"></span>
+        <button class="mini" id="dDel">Retirer du plan</button>
+      </div>
+      <div class="dactions" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <select id="dStyle" style="margin:0;min-width:180px"></select>
+        <select id="dFrom" style="margin:0;min-width:150px">
+          <option value="current">l'image actuelle</option>
+          <option value="source">la photo d'origine</option>
+        </select>
+        <select id="dMode" style="margin:0;min-width:180px">
+          <option value="duplicate">ajouter une variante</option>
+          <option value="replace">remplacer l'image actuelle</option>
+        </select>
+        <button class="act" id="dRun" style="padding:8px 16px;font-size:13px">Lancer sur cette photo</button>
+      </div>
+      <div class="dactions" id="dLibre" style="display:none;margin-top:10px">
+        <div class="field wide">
+          <label for="dPrompt">Ton prompt</label>
+          <textarea id="dPrompt" rows="2" placeholder="Décris la retouche voulue, en anglais de préférence."></textarea>
+        </div>
+        <div class="field">
+          <label for="dLabel">Nom court</label>
+          <input type="text" id="dLabel" placeholder="sans-dressage" maxlength="30" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+<script type="module">
+  // adjust.js est le MEME fichier que celui utilise par le serveur : l'apercu
+  // regle ici correspond exactement a l'image livree.
+  import { DEFAULTS, CHAMPS, applyToPixels, isNeutral, luminanceMoyenne } from './adjust.js';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const api = async (url, opts) => {
+    const r = await fetch(url, opts);
+    if (r.status === 401) {
+      const d = await r.json().catch(() => ({}));
+      window.location.href = d.login || '/auth/login';
+      throw new Error('Session expirée, reconnexion…');
+    }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('Erreur ' + r.status));
+    return d;
+  };
+  const showErr = (id, m) => { $(id).textContent = m; $(id).classList.add('show'); };
+
+  // Une erreur affichee dans une zone d'un ecran masque n'existe pas. On
+  // l'envoie sur l'ecran visible, quel qu'il soit : c'est ce qui manquait
+  // quand le catalogue de prompts echouait sans un mot.
+  function signalerBug(quoi, e) {
+    const ou = e && e.filename ? ` (${String(e.filename).split('/').pop()}:${e.lineno})` : '';
+    const msg = (e && (e.message || e.reason)) || e || 'erreur inconnue';
+    erreurVisible(`Erreur ${quoi}${ou} : ${msg}. Version ${VERSION}. Envoie ce message.`);
+    console.error('[joy]', quoi, e);
+  }
+
+  window.addEventListener('error', (e) => signalerBug('JavaScript', e));
+  window.addEventListener('unhandledrejection', (e) => signalerBug('asynchrone', { message: e.reason && e.reason.message }));
+
+  function erreurVisible(m) {
+    const cible = $('scPlan').classList.contains('active') ? 'planErr'
+      : $('scList').classList.contains('active') ? 'listErr' : 'setupErr';
+    showErr(cible, m);
+  }
+
+  const VERSION = 'v1-outil-abl';
+  // Un seul modèle dans cette version : plus de sélecteur, la clé est fixe
+  // (voir models.js côté serveur — doit rester synchronisée avec la clé par
+  // défaut qui y est déclarée).
+  const FIXED_MODEL = 'nano-pro';
+
+  let tab = 'drive', etab = null;
+  let previewId = null, chosenMedia = new Set();
+  let avertPrompts = '';
+  let sessionId = null, session = null, poll = null;
+  let selected = new Set(), ordre = [], dernierClic = null;
+  let filtre = 'toutes', detailId = null;
+  let cmpMode = 'gliss', cmpPos = 50, cmpFlip = false;
+  const reglagesLocaux = new Map();
+  const imgCache = new Map();
+
+  const LIBELLES = { brightness: 'Luminosité', contrast: 'Contraste', saturation: 'Saturation', temperature: 'Température' };
+  const ETATS = { running: 'en cours', ready: 'à finaliser', validating: 'envoi…', validated: 'envoyé', failed: 'échec' };
+
+  // ---------- Catalogues et identité ----------
+  let nbPrompts = 0;
+
+  async function loadCatalogues() {
+    try {
+      const d = await api('/api/styles');
+      const liste = d.styles || [];
+      nbPrompts = liste.length;
+      const opts = liste.map((s) => `<option value="${s.key}">${esc(s.label)}</option>`).join('');
+      $('rStyle').innerHTML = opts + '<option value="__libre__">✏️ Écrire un prompt…</option>';
+      avertPrompts = d.notionError || '';
+      if (d.notionError) erreurVisible(d.notionError);
+
+      if ($('dStyle')) $('dStyle').innerHTML = $('rStyle').innerHTML;
+    } catch (e) {
+      nbPrompts = 0;
+      erreurVisible('Catalogue de prompts indisponible : ' + e.message + ' — recharge la page.');
+    }
+    majSetup();
+  }
+
+  async function chargerIdentite() {
+    try {
+      const me = await api('/api/me');
+      const html = `${esc(me.login)} · <a href="/auth/logout">se déconnecter</a>`
+        + ` · <span style="opacity:.6">${VERSION}</span>`;
+      for (const id of ['who1', 'who2', 'who3']) $(id).innerHTML = html;
+    } catch { /* redirection déjà déclenchée */ }
+  }
+
+  function montrer(ecran) {
+    $('wSetup').style.display = ecran === 'setup' ? 'block' : 'none';
+    $('scList').classList.toggle('active', ecran === 'list');
+    $('scPlan').classList.toggle('active', ecran === 'plan');
+    if (ecran !== 'plan') fermerDetail();
+  }
+  document.querySelectorAll('.entry').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      // En mode "ajouter à une session existante", seul l'onglet liens a un
+      // sens (voir renderEtabEdit -> btnAjouterMedias).
+      if (ajoutPourSession && b.dataset.tab !== 'links') return;
+      tab = b.dataset.tab;
+      document.querySelectorAll('.entry').forEach((x) => x.classList.toggle('on', x === b));
+      $('pDrive').classList.toggle('on', tab === 'drive');
+      $('pLinks').classList.toggle('on', tab === 'links');
+      majSetup();
+    }));
+
+  // La destination est annoncée avant l'import, pas découverte après.
+  function majSetup() {
+    const besoinEtab = tab === 'links';
+    $('etabBlock').style.display = besoinEtab ? 'block' : 'none';
+
+    let d;
+    if (tab === 'drive') {
+      d = 'Les contenus validés iront dans un sous-dossier <code>_retouches</code> créé dans le dossier Drive que tu indiques, à côté des originaux.';
+    } else if (etab) {
+      d = `Les contenus validés iront dans <code>${esc(etab.nom)}_social media</code>, dans le dossier de l'établissement <b>${esc(etab.id)} - ${esc(etab.nom)}</b>.`;
+    } else {
+      d = "Choisis ou crée un établissement pour pouvoir lancer l'import.";
+    }
+    $('destPreview').innerHTML = d;
+
+    $('start').style.display = 'block';
+    if (tab === 'links') {
+      const n = chosenMedia.size;
+      $('start').disabled = !previewId || n === 0 || !etab;
+      $('start').textContent = !previewId
+        ? 'Cherche d\u2019abord les m\u00e9dias'
+        : n === 0 ? 'Aucun m\u00e9dia s\u00e9lectionn\u00e9'
+        : !etab ? 'Choisis un établissement'
+        : ajoutPourSession
+          ? `Ajouter ${n} m\u00e9dia${n > 1 ? 's' : ''} \u00e0 la session`
+          : `Charger ${n} m\u00e9dia${n > 1 ? 's' : ''}`;
+    } else {
+      $('start').disabled = false;
+      $('start').textContent = 'Charger les photos';
+    }
+  }
+
+  // Aperçu des liens : liste les médias sans les télécharger. Un post peut en
+  // contenir dix dont un seul intéresse le CSM.
+  $('btnPreview').addEventListener('click', async () => {
+    const urls = $('linksText').value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    $('setupErr').classList.remove('show');
+    if (!urls.length) return showErr('setupErr', 'Colle au moins un lien.');
+    $('btnPreview').disabled = true;
+    $('btnPreview').textContent = 'Recherche…';
+    try {
+      const d = await api('/api/links/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      });
+      previewId = d.previewId;
+      chosenMedia = new Set();
+      // Tout est coché par défaut : le cas courant est de garder tout le post.
+      for (const r of d.resultats) for (const m of r.media) chosenMedia.add(m.id);
+      renderPreview(d.resultats);
+    } catch (e) {
+      showErr('setupErr', e.message);
+      previewId = null;
+      $('previewZone').innerHTML = '';
+    } finally {
+      $('btnPreview').disabled = false;
+      $('btnPreview').textContent = 'Chercher les médias';
+      majSetup();
+    }
+  });
+
+  function renderPreview(resultats) {
+    $('previewZone').innerHTML = resultats.map((r) => {
+      const tete = `<div class="posthead">
+        <span class="src">${esc(r.source || 'inconnu')}</span>
+        <span class="url">${esc(r.postUrl)}</span>
+        ${r.media.length > 1 ? `<button data-all="${esc(r.postUrl)}">tout / rien</button>` : ''}
+      </div>`;
+      if (r.error) return `<div class="post">${tete}<div class="posterr">${esc(r.error)}</div></div>`;
+      const tuiles = r.media.map((m) => `
+        <button class="mtile ${chosenMedia.has(m.id) ? 'on' : ''}" data-media="${m.id}" data-post="${esc(r.postUrl)}"
+                title="${m.type === 'video' ? 'Vidéo' : 'Photo'} ${m.width && m.height ? m.width + '×' + m.height : ''}">
+          ${m.thumb ? `<img src="${esc(m.thumb)}" alt="" loading="lazy" />` : '<span class="ph">🎬</span>'}
+          <span class="badge">${m.type === 'video' ? 'vidéo' : m.ext}</span>
+          <span class="tick">✓</span>
+        </button>`).join('');
+      const avert = r.media.filter((m) => m.warning).map((m) => `<div class="mwarn">⚠ ${esc(m.warning)}</div>`).join('');
+      return `<div class="post">${tete}<div class="grid">${tuiles}</div>${avert}</div>`;
+    }).join('');
+
+    document.querySelectorAll('[data-media]').forEach((el) =>
+      el.addEventListener('click', () => {
+        const id = el.dataset.media;
+        if (chosenMedia.has(id)) chosenMedia.delete(id); else chosenMedia.add(id);
+        el.classList.toggle('on', chosenMedia.has(id));
+        majSetup();
+      }));
+
+    document.querySelectorAll('[data-all]').forEach((el) =>
+      el.addEventListener('click', () => {
+        const tuiles = [...document.querySelectorAll(`[data-post="${el.dataset.all.replace(/"/g, '\\"')}"]`)];
+        const toutCoche = tuiles.every((t) => chosenMedia.has(t.dataset.media));
+        for (const t of tuiles) {
+          if (toutCoche) chosenMedia.delete(t.dataset.media); else chosenMedia.add(t.dataset.media);
+          t.classList.toggle('on', chosenMedia.has(t.dataset.media));
+        }
+        majSetup();
+      }));
+  }
+
+  // Recherche d'établissement
+  let tQ = null;
+  $('etabQ').addEventListener('input', () => {
+    clearTimeout(tQ);
+    const q = $('etabQ').value.trim();
+    $('etabCreerHint').style.display = 'none';
+    $('etabCreerBlock').style.display = 'none';
+    if (q.length < 2) { $('etabResults').innerHTML = ''; return; }
+    tQ = setTimeout(async () => {
+      try {
+        const d = await api('/api/etabs?q=' + encodeURIComponent(q));
+        const r = d.results || [];
+        if (r.length) {
+          $('etabResults').innerHTML = `<div class="results">${r.map((x) =>
+            `<button data-id="${esc(x.etab.id)}" data-nom="${esc(x.etab.nom)}" data-folder="${esc(x.folderId)}">${esc(x.name)}</button>`).join('')}</div>`;
+          document.querySelectorAll('#etabResults button').forEach((b) =>
+            b.addEventListener('click', () => choisirEtab({ id: b.dataset.id, nom: b.dataset.nom, folderId: b.dataset.folder })));
+        } else {
+          // Aucun dossier existant : la plupart des établissements n'ont pas
+          // encore de Drive. On propose de le créer, avec ID + Nom saisis à
+          // la main (le dossier "ID - Nom" est créé automatiquement à la
+          // validation, voir drive.findOrCreateEtabFolder).
+          $('etabResults').innerHTML = '';
+          $('etabCreerHint').style.display = 'block';
+          $('etabCreerBlock').style.display = 'block';
+          // Pré-remplissage pratique : un nombre va probablement dans l'ID,
+          // du texte dans le nom.
+          if (/^\d+$/.test(q)) $('etabCreerId').value = q;
+          else $('etabCreerNom').value = q;
+        }
+      } catch (e) { showErr('setupErr', e.message); }
+    }, 300);
+  });
+
+  $('etabCreerValider').addEventListener('click', () => {
+    const id = $('etabCreerId').value.trim();
+    const nom = $('etabCreerNom').value.trim();
+    if (!id || !nom) return showErr('setupErr', "Renseigne l'ID et le nom de l'établissement.");
+    choisirEtab({ id, nom, folderId: null });
+  });
+
+  function choisirEtab(e) {
+    etab = e;
+    $('etabSearchBlock').style.display = 'none';
+    $('etabChosen').innerHTML = `<div class="chosen">✓ <b>${esc(e.id)} - ${esc(e.nom)}</b><button id="etabUndo">changer</button></div>`;
+    $('etabUndo').addEventListener('click', () => {
+      etab = null;
+      $('etabChosen').innerHTML = '';
+      $('etabSearchBlock').style.display = 'block';
+      $('etabQ').value = ''; $('etabResults').innerHTML = '';
+      $('etabCreerHint').style.display = 'none';
+      $('etabCreerBlock').style.display = 'none';
+      $('etabCreerId').value = ''; $('etabCreerNom').value = '';
+      majSetup();
+    });
+    majSetup();
+  }
+
+  $('start').addEventListener('click', lancer);
+
+  // Rempli quand "+ Ajouter des médias" est cliqué depuis l'écran Import :
+  // l'écran de départ sert alors à COMPLÉTER cette session, pas à en ouvrir
+  // une nouvelle. Voir renderEtabEdit().
+  let ajoutPourSession = null;
+
+  async function lancer() {
+    $('setupErr').classList.remove('show');
+    $('start').disabled = true;
+    const libelle = $('start').textContent;
+    $('start').textContent = 'Chargement…';
+    try {
+      let d;
+      if (ajoutPourSession) {
+        if (!previewId) throw new Error("Clique d'abord sur « Chercher les médias ».");
+        if (chosenMedia.size === 0) throw new Error('Sélectionne au moins un média.');
+        if (etab) {
+          await api(`/api/sessions/${ajoutPourSession}/etab`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(etab),
+          });
+        }
+        d = await api(`/api/sessions/${ajoutPourSession}/links-media`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ previewId, ids: [...chosenMedia] }),
+        });
+        d.sessionId = ajoutPourSession;
+        ajoutPourSession = null;
+      } else if (tab === 'drive') {
+        const driveUrl = $('driveUrl').value.trim();
+        if (!driveUrl) throw new Error('Colle le lien du dossier Drive.');
+        d = await api('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driveUrl, destination: 'source' }),
+        });
+      } else {
+        if (!previewId) throw new Error("Clique d'abord sur « Chercher les médias ».");
+        if (chosenMedia.size === 0) throw new Error('Sélectionne au moins un média.');
+        if (!etab) throw new Error("Choisis ou crée un établissement.");
+        d = await api('/api/links/import', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            previewId, ids: [...chosenMedia], etab,
+          }),
+        });
+        if (d.erreurs && d.erreurs.length) {
+          console.warn('[import] médias en échec :', d.erreurs);
+        }
+      }
+      sessionId = d.sessionId;
+      montrer('plan');
+      startPolling();
+    } catch (e) {
+      showErr('setupErr', e.message);
+      $('start').disabled = false;
+      $('start').textContent = libelle;
+    }
+  }
+
+  // ---------- Écran 2 ----------
+
+  $('lienSessions').addEventListener('click', (e) => { e.preventDefault(); ouvrirListe(); });
+  $('btnNouvelle').addEventListener('click', () => { ajoutPourSession = null; $('setupTitle').textContent = 'Importer des contenus'; montrer('setup'); });
+
+  let sessionsChargees = [];
+  let moiMeme = null;
+
+  async function ouvrirListe() {
+    montrer('list');
+    $('listErr').classList.remove('show');
+    $('listRows').innerHTML = '<p class="sub">Chargement…</p>';
+    try {
+      const d = await api('/api/sessions');
+      sessionsChargees = d.sessions || [];
+      moiMeme = d.me;
+      filtrerListe();
+    } catch (e) { showErr('listErr', e.message); }
+  }
+
+  function filtrerListe() {
+    const q = $('listQ').value.trim().toLowerCase();
+    const liste = !q ? sessionsChargees : sessionsChargees.filter((s) =>
+      [s.folderName, s.etab && s.etab.nom, s.etab && s.etab.id, s.user, s.styleLabel, s.outputFolderName]
+        .filter(Boolean).join(' ').toLowerCase().includes(q));
+    rendreListe(liste, moiMeme);
+  }
+  $('listQ').addEventListener('input', filtrerListe);
+
+  function rendreListe(sessions, moi) {
+    if (sessions.length === 0) {
+      $('listMeta').textContent = '';
+      $('listRows').innerHTML = '<div class="card"><p class="sub" style="margin:0">Aucune session pour le moment.</p></div>';
+      return;
+    }
+    const total = sessions.reduce((n, s) => n + (s.cost || 0), 0);
+    $('listMeta').innerHTML =
+      `<b>${sessions.length}</b> session${sessions.length > 1 ? 's' : ''} · ` +
+      `coût cumulé <b>${total.toFixed(2)} $</b> · images conservées 14 jours, historique 90 jours`;
+
+    // Regroupement par personne, la plus récemment active en premier.
+    const parPers = new Map();
+    for (const s of sessions) {
+      const k = s.user || 'inconnu';
+      if (!parPers.has(k)) parPers.set(k, []);
+      parPers.get(k).push(s);
+    }
+    const groupes = [...parPers.entries()].sort((a, b) =>
+      String(b[1][0].updatedAt).localeCompare(String(a[1][0].updatedAt)));
+
+    $('listRows').innerHTML = groupes.map(([pers, liste]) => {
+      const coutPers = liste.reduce((n, s) => n + (s.cost || 0), 0);
+      return `<div class="pers">
+        <div class="pershead">
+          <b>${esc(pers)}</b>
+          ${pers === moi ? '<span class="moi">toi</span>' : ''}
+          <span class="tot">${liste.length} session${liste.length > 1 ? 's' : ''} · ${coutPers.toFixed(2)} $</span>
+        </div>
+        ${liste.map(ligneSession).join('')}
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('[data-open]').forEach((el) =>
+      el.addEventListener('click', () => reprendre(el.dataset.open)));
+  }
+
+  function ligneSession(s) {
+    // Le nom du dossier de depart EST le nom du shooting : c'est lui qu'on
+    // cherche quand on veut retrouver une ancienne session. L'etablissement
+    // vient en complement, pas a la place.
+    const nom = s.folderName && s.folderName !== 'Import'
+      ? s.folderName
+      : (s.etab && s.etab.nom) || (s.mode === 'links' ? 'Import par liens' : 'Fichiers déposés');
+    const sousTitre = s.etab && s.etab.nom && s.etab.nom !== nom ? `${s.etab.id} · ${s.etab.nom}` : '';
+    const d = new Date(s.updatedAt);
+    const quand = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+      + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const det = [
+      `${s.count} élément${s.count > 1 ? 's' : ''}`,
+      s.videos ? `${s.videos} vidéo${s.videos > 1 ? 's' : ''}` : '',
+      s.styleLabel || 'aucune retouche',
+      s.cost ? `${s.cost.toFixed(2)} $` : 'gratuit',
+    ].filter(Boolean).join(' · ');
+
+    // Une session dont les images ont été purgées ne peut plus être reprise :
+    // le dire plutôt que d'offrir un bouton qui mènerait à des vignettes vides.
+    const action = s.imagesPurgees && s.status !== 'validated'
+      ? '<span class="det">images effacées</span>'
+      : s.status === 'validated' && s.outputFolderUrl
+        ? `<a class="det" href="${s.outputFolderUrl}" target="_blank" rel="noopener">ouvrir dans Drive</a>`
+        : `<button data-open="${s.id}">${s.status === 'validated' ? 'Revoir' : 'Reprendre'}</button>`;
+
+    return `<div class="sess">
+      <div>
+        <div class="nom">${esc(nom)}${sousTitre ? ` <span class="det">${esc(sousTitre)}</span>` : ''}</div>
+        <div class="det">${quand} · ${esc(det)}</div>
+      </div>
+      <span class="grow"></span>
+      <span class="etat ${s.status}">${ETATS[s.status] || s.status}</span>
+      ${action}
+    </div>`;
+  }
+
+  async function reprendre(id) {
+    sessionId = id;
+    selected.clear();
+    imgCache.clear();
+    reglagesLocaux.clear();
+    montrer('plan');
+    startPolling();
+  }
+
+
+  // ---------- Plan de travail : sondage et rendu ----------
+  function startPolling() {
+    clearInterval(poll);
+    const tick = async () => {
+      try {
+        session = await api('/api/sessions/' + sessionId);
+        render();
+        if (session.status !== 'running' && session.status !== 'validating') clearInterval(poll);
+      } catch (e) { showErr('planErr', e.message); clearInterval(poll); }
+    };
+    poll = setInterval(tick, 2000);
+    tick();
+  }
+
+  const photos = () => (session && session.photos) || [];
+  const parId = (id) => photos().find((p) => p.id === id);
+
+  // Une photo dupliquee appartient a la lignee de son original. On remonte la
+  // chaine pour trouver la racine : c'est l'unite de la grille.
+  function racineDe(p) {
+    const m = new Map(photos().map((x) => [x.id, x]));
+    let c = p, g = 0;
+    while (c.origin && m.has(c.origin) && g++ < 50) c = m.get(c.origin);
+    return c;
+  }
+
+  // [{ racine, versions: [photos de la lignee, racine en premier] }]
+  function lignees() {
+    const gr = new Map();
+    for (const p of photos()) {
+      const r = racineDe(p).id;
+      if (!gr.has(r)) gr.set(r, []);
+      gr.get(r).push(p);
+    }
+    return [...gr.entries()].map(([rid, versions]) => ({
+      racine: parId(rid) || versions[0],
+      versions,
+    }));
+  }
+
+  const regl = (p) => reglagesLocaux.get(p.id) || { ...DEFAULTS, ...(p.adjust || {}) };
+
+  // Vignette : le rendu retenu, ou l'original si la photo n'a pas été retouchée.
+  function urlPhoto(p, w) {
+    const cur = (p.renders || []).find((r) => r.id === p.currentRenderId);
+    const base = cur
+      ? `/api/sessions/${session.id}/photos/${p.id}/render/${cur.id}`
+      : `/api/sessions/${session.id}/photos/${p.id}/source`;
+    return base + (w ? `?w=${w}` : '');
+  }
+
+  // Reflete aLivrer() du serveur : par lignee, les retouches si elles
+  // existent, l'original sinon. Les videos partent toujours.
+  function compterALivrer(ps) {
+    let n = 0;
+    for (const g of lignees()) {
+      n += g.versions.filter((p) => p.kind === 'video' && p.sourceRef).length;
+      const photos = g.versions.filter((p) => p.kind !== 'video');
+      if (photos.length === 0) continue;
+      const ret = photos.filter((p) => p.status !== 'error' && p.currentRenderId);
+      if (ret.length) { n += ret.length; continue; }
+      if (photos.some((p) => p.status !== 'error')) n += 1;
+    }
+    return n;
+  }
+
+  const FILTRES = [
+    { k: 'toutes', l: 'Toutes', f: () => true },
+    { k: 'retouchees', l: 'Retouchées', f: (p) => (p.renders || []).length > 0 },
+    { k: 'intactes', l: 'Intactes', f: (p) => (p.renders || []).length === 0 && p.kind !== 'video' },
+    { k: 'reglees', l: 'Colorimétrie', f: (p) => !isNeutral(p.adjust) },
+    { k: 'echec', l: 'En échec', f: (p) => p.status === 'error' },
+    { k: 'videos', l: 'Vidéos', f: (p) => p.kind === 'video' },
+  ];
+  const filtreCourant = () => (FILTRES.find((x) => x.k === filtre) || FILTRES[0]).f;
+
+  // Établissement modifiable + compléter la session, directement sur l'écran
+  // Import : répond au besoin de revenir corriger l'établissement ou ajouter
+  // des photos oubliées sans perdre la session déjà créée.
+  function renderEtabEdit(s) {
+    const box = $('etabEditBlock');
+    if (!s || s.status === 'validated') { box.innerHTML = ''; return; }
+
+    const etabTxt = s.etab ? `${esc(s.etab.id)} - ${esc(s.etab.nom)}` : 'non défini';
+    const ajouterBtn = s.mode === 'drive'
+      ? `<button class="mini" id="btnRefreshDrive" type="button">Actualiser depuis Drive</button>`
+      : `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter des médias</button>`;
+
+    box.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="hint" style="margin:0">Établissement : <b>${etabTxt}</b></span>
+        <button class="mini" id="btnEtabModifier" type="button">modifier</button>
+        ${ajouterBtn}
+      </div>
+      <div id="etabModifierForm" style="display:none;margin-top:10px;max-width:340px">
+        <label for="etabEditId">ID</label>
+        <input type="text" id="etabEditId" value="${s.etab ? esc(s.etab.id) : ''}" />
+        <label for="etabEditNom">Nom</label>
+        <input type="text" id="etabEditNom" value="${s.etab ? esc(s.etab.nom) : ''}" />
+        <button class="ghost wide" id="btnEtabValider" type="button">Enregistrer</button>
+      </div>`;
+
+    $('btnEtabModifier').addEventListener('click', () => {
+      const f = $('etabModifierForm');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
+
+    $('btnEtabValider').addEventListener('click', async () => {
+      const id = $('etabEditId').value.trim();
+      const nom = $('etabEditNom').value.trim();
+      if (!id || !nom) return showErr('planErr', "Renseigne l'ID et le nom de l'établissement.");
+      try {
+        session = await api(`/api/sessions/${s.id}/etab`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, nom }),
+        });
+        render();
+      } catch (e) { showErr('planErr', e.message); }
+    });
+
+    if (s.mode === 'drive') {
+      $('btnRefreshDrive').addEventListener('click', async () => {
+        const b = $('btnRefreshDrive');
+        b.disabled = true;
+        b.textContent = 'Actualisation…';
+        try {
+          session = await api(`/api/sessions/${s.id}/refresh-drive`, { method: 'POST' });
+          render();
+        } catch (e) {
+          showErr('planErr', e.message);
+          b.disabled = false;
+          b.textContent = 'Actualiser depuis Drive';
+        }
+      });
+    } else {
+      $('btnAjouterMedias').addEventListener('click', () => {
+        ajoutPourSession = s.id;
+        previewId = null;
+        chosenMedia = new Set();
+        $('linksText').value = '';
+        $('previewZone').innerHTML = '';
+        tab = 'links';
+        document.querySelectorAll('.entry').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'links'));
+        $('pDrive').classList.remove('on');
+        $('pLinks').classList.add('on');
+        if (s.etab) choisirEtab({ ...s.etab });
+        $('setupTitle').textContent = 'Ajouter des médias à cette session';
+        montrer('setup');
+        majSetup();
+      });
+    }
+  }
+
+  function render() {
+    const ps = photos();
+    const pretes = ps.filter((p) => p.status === 'ok' && !p.busy).length;
+    const cout = session.cost || 0;
+
+    $('planTitle').textContent = (session.source && session.source.folderName) || 'Plan de travail';
+    // Ce que la validation enverra : les retouches d'une photo, ou son
+    // original si elle n'en a aucune. Meme regle que le serveur.
+    const aEnvoyer = compterALivrer(ps);
+    $('planMeta').innerHTML = [
+      `<span><b>${aEnvoyer}</b> fichier${aEnvoyer > 1 ? 's' : ''} à envoyer</span>`,
+      `<span>coût <b>${cout.toFixed(2)} $</b></span>`,
+      session.status === 'running' ? '<span>génération en cours…</span>' : '',
+    ].filter(Boolean).join('');
+
+    $('destLine').innerHTML = session.destination === 'source'
+      ? `Destination : sous-dossier <b>${esc((session.source && session.source.folderName) || '')}_retouches</b>.`
+      : `Destination : <b>${esc(session.etab ? session.etab.nom : '')}_social media</b>.`;
+
+    renderEtabEdit(session);
+
+    if (avertPrompts) showErr('planErr', avertPrompts);
+    majValidation();
+
+    if (session.status === 'validated') {
+      const lien = `<a href="${session.outputFolderUrl}" target="_blank" rel="noopener">Ouvrir le dossier dans Drive</a>`;
+      // Les images de travail sont supprimees a la validation : on ne peut
+      // plus retoucher CETTE session. Mais les fichiers livres sont dans
+      // Drive, donc on propose d'en repartir en un clic plutot que de
+      // reuploader les originaux a la main.
+      const repart = session.outputFolderUrl
+        ? `<button class="mini" id="btnRepartir" style="margin-top:12px">Repartir de ce dossier pour retoucher</button>`
+        : '';
+      $('grid').innerHTML = `<div class="card">
+        <h2>Envoyé le ${new Date(session.updatedAt || session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</h2>
+        <p class="sub" style="margin:8px 0 0"><b>${session.validatedCount}</b> élément${session.validatedCount > 1 ? 's' : ''}
+        dans <b>${esc(session.outputFolderName || '')}</b>. ${lien}</p>
+        ${repart}</div>`;
+      $('gChips').innerHTML = ''; $('gCount').textContent = '';
+      if ($('btnRepartir')) {
+        $('btnRepartir').addEventListener('click', async () => {
+          $('btnRepartir').disabled = true;
+          $('btnRepartir').textContent = 'Ouverture…';
+          try {
+            const d = await api('/api/sessions', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ driveUrl: session.outputFolderUrl, destination: 'source' }),
+            });
+            sessionId = d.sessionId;
+            selected.clear(); reglagesLocaux.clear(); imgCache.clear();
+            startPolling();
+          } catch (e) {
+            showErr('planErr', e.message);
+            $('btnRepartir').disabled = false;
+            $('btnRepartir').textContent = 'Repartir de ce dossier pour retoucher';
+          }
+        });
+      }
+      return;
+    }
+
+    renderGrille();
+    if (detailId) renderDetail();
+  }
+
+  function renderGrille() {
+    const ps = photos();
+    const f = filtreCourant();
+    const groupes = lignees()
+      .map((g) => ({ ...g, visibles: g.versions.filter(f) }))
+      .filter((g) => g.visibles.length > 0);
+
+    // La selection porte sur les VERSIONS, chacune ayant son volet : plus
+    // besoin de designer une version active par lignee.
+    ordre = groupes.flatMap((g) => g.visibles.map((v) => v.id));
+    for (const id of [...selected]) if (!ordre.includes(id)) selected.delete(id);
+
+    // Les puces filtrent l'AFFICHAGE, elles ne selectionnent rien. Le libelle
+    // le dit, parce que leur apparence de bascule pretait a confusion.
+    $('gChips').innerHTML = '<span class="flab">Filtrer l\u2019affichage</span>' + FILTRES.map((x) => {
+      const n = ps.filter(x.f).length;
+      if (n === 0 && x.k !== 'toutes') return '';
+      return `<button class="chip2 ${filtre === x.k ? 'on' : ''}" data-filtre="${x.k}">${x.l} ${n}</button>`;
+    }).join('');
+
+    const n = selected.size;
+    const selectionnables = ordre.filter((id) => { const p = parId(id); return p && p.kind !== 'video'; }).length;
+    // Deux nombres differents et faciles a confondre : les photos d'origine,
+    // et le total des vues affichees (originaux + variantes generees).
+    const retouchees = ps.filter((p) => (p.renders || []).length > 0).length;
+    $('gCount').textContent = n
+      ? `${n} sélectionnée${n > 1 ? 's' : ''} sur ${selectionnables}`
+      : `${groupes.length} photo${groupes.length > 1 ? 's' : ''}` +
+        (retouchees ? ` · ${retouchees} version${retouchees > 1 ? 's' : ''} générée${retouchees > 1 ? 's' : ''}` : '');
+    $('gAll').disabled = selectionnables === 0;
+    $('gNone').disabled = n === 0;
+
+    majListeDom(groupes);
+    majBarre();
+  }
+
+  // Empreinte d'une LIGNE entiere : si rien n'a change dans la lignee, on ne
+  // touche pas au DOM, donc les images ne sont pas rechargees. Reconstruire
+  // le HTML a chaque sondage detruisait les balises img avant qu'elles
+  // finissent de charger.
+  function empreinte(g) {
+    return JSON.stringify(g.visibles.map((p) => [
+      p.id, p.currentRenderId, p.status, !!p.busy, p.kind, p.suffixes || [], p.adjust,
+      (p.renders || []).length,
+    ]));
+  }
+
+  function majListeDom(groupes) {
+    const liste = $('grid');
+    if (groupes.length === 0) {
+      liste.replaceChildren();
+      liste.innerHTML = '<p class="sub">Aucun élément pour ce filtre.</p>';
+      return;
+    }
+    const existantes = new Map();
+    for (const el of liste.querySelectorAll('[data-row]')) existantes.set(el.dataset.row, el);
+
+    const voulues = [];
+    for (const g of groupes) {
+      const emp = empreinte(g);
+      const dejaLa = existantes.get(g.racine.id);
+      if (dejaLa && dejaLa.dataset.emp === emp) {
+        // Etat identique : on garde le noeud, donc ses images restent
+        // chargees. Seule la selection a pu bouger.
+        for (const v of g.visibles) {
+          const vol = dejaLa.querySelector(`[data-pane="${v.id}"]`);
+          if (vol) vol.classList.toggle('sel', selected.has(v.id));
+          const c = dejaLa.querySelector(`[data-pick="${v.id}"]`);
+          if (c) c.checked = selected.has(v.id);
+        }
+        voulues.push(dejaLa);
+      } else {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = ligneHtml(g);
+        const neuve = tmp.firstElementChild;
+        neuve.dataset.emp = emp;
+        voulues.push(neuve);
+      }
+    }
+
+    // replaceChildren fixe la liste des enfants a EXACTEMENT ceux voulus :
+    // les noeuds reutilises sont deplaces sans recharger leurs images, les
+    // nouveaux sont inseres, et tout le reste disparait.
+    //
+    // La version precedente inserait le nouveau noeud sans retirer l'ancien
+    // quand l'etat d'une ligne changeait : chaque generation ajoutait donc un
+    // doublon de la meme photo, et le sondage en empilait a chaque passage.
+    liste.replaceChildren(...voulues);
+    bindGrille();
+  }
+
+  function ligneHtml(g) {
+    const r = g.racine;
+    const chaine = (r.renders || []).filter((x) => x.status === 'ok').map((x) => x.promptLabel).join(' → ');
+    const nVer = g.visibles.length;
+
+    if (r.kind === 'video') {
+      return `<div class="row2" data-row="${g.racine.id}">
+        <div class="rtop"><span class="nom">${esc(r.sourceName)}</span>
+          <span class="det">vidéo, importée telle quelle</span></div>
+        <div class="strip">${volet(r, 0)}</div></div>`;
+    }
+
+    // La racine n'a AUCUN rendu : elle EST l'original, elle ne merite donc
+    // pas un volet "Resultat" identique a l'original. C'est ce qui donnait
+    // trois volets apres une seule iteration : Original, Resultat vide, et la
+    // variante.
+    const racineVierge = (r.renders || []).length === 0 && !r.busy && r.status !== 'error';
+    const autres = g.visibles.filter((v) => v.id !== r.id);
+    const racineVisible = g.visibles.some((v) => v.id === r.id);
+
+    if (r.kind !== 'video' && racineVierge) {
+      const volets = [
+        racineVisible ? volet(r, 0, { estOriginal: true }) : '',
+        ...autres.map((v, i) => volet(v, i + 1)),
+      ].filter(Boolean).join('');
+      const n = (racineVisible ? 1 : 0) + autres.length;
+      return `<div class="row2" data-row="${g.racine.id}">
+        <div class="rtop">
+          <span class="nom">${esc(r.base)}</span>
+          <span class="det">${autres.length ? esc(chaine2(autres)) : 'importée, aucune retouche'}</span>
+          <span class="grow"></span>
+          ${n > 1 ? `<span class="det">${n} vues · défile vers la droite →</span>` : ''}
+        </div>
+        <div class="strip">${volets}</div>
+      </div>`;
+    }
+
+    // La racine a un rendu : l'original a gauche pour comparer, sans case a
+    // cocher (le point de depart se choisit dans la barre du haut), puis un
+    // volet par version.
+    const src = `<div class="pane src">
+      <div class="phead"><span class="plab">Original</span></div>
+      <img src="/api/sessions/${session.id}/photos/${r.id}/source?w=700" alt="Original" loading="lazy" />
+      <div class="pstats"><span>${esc(r.sourceName)}</span></div>
+    </div>`;
+
+    return `<div class="row2" data-row="${g.racine.id}">
+      <div class="rtop">
+        <span class="nom">${esc(r.base)}</span>
+        <span class="det">${esc(chaine || 'aucune retouche')}</span>
+        <span class="grow"></span>
+        <span class="det">${nVer} version${nVer > 1 ? 's' : ''}${nVer > 1 ? ' · défile vers la droite →' : ''}</span>
+      </div>
+      <div class="strip">${src}${g.visibles.map((v, i) => volet(v, i)).join('')}</div>
+    </div>`;
+  }
+
+  // Chaine des prompts d'un ensemble de versions, pour l'en-tete de ligne.
+  function chaine2(versions) {
+    const noms = [];
+    for (const v of versions) {
+      for (const x of (v.renders || [])) {
+        if (x.status === 'ok' && !noms.includes(x.promptLabel)) noms.push(x.promptLabel);
+      }
+    }
+    return noms.join(' · ');
+  }
+
+  function volet(p, index, opts = {}) {
+    const cur = (p.renders || []).find((x) => x.id === p.currentRenderId);
+    const suffixe = (p.suffixes || []).slice(-1)[0];
+    const titre = p.kind === 'video' ? 'Vidéo'
+      : opts.estOriginal ? 'Original'
+      : index === 0 ? 'Résultat' : (suffixe || 'Variante');
+    const nom = [p.base, ...(p.suffixes || [])].join('_');
+
+    let corps;
+    if (p.kind === 'video') {
+      corps = `<div class="vide2 vid">🎬<span>${esc(p.sourceName)}</span>
+        <span style="font-size:11px;opacity:.7">ni retouche ni réglage applicables</span></div>`;
+    } else if (p.busy) {
+      corps = '<div class="vide2 wait">Génération en cours…</div>';
+    } else if (p.status === 'error') {
+      corps = `<div class="vide2">${esc(p.error || 'Échec de la génération')}</div>`;
+    } else {
+      corps = `<img src="${urlPhoto(p, 700)}" alt="${esc(titre)}" loading="lazy" />`;
+    }
+
+    // Format et resolution affiches : c'est ce qui permet de verifier d'un
+    // coup d'oeil qu'aucune etape n'a degrade l'image.
+    const dims = cur && cur.largeur && cur.hauteur ? `${cur.largeur}×${cur.hauteur}` : '';
+    const fmt = cur && cur.ext ? cur.ext.toUpperCase() : '';
+    const stats = p.kind === 'video' ? '' : `<div class="pstats">
+      ${fmt ? `<span>${fmt}${dims ? ' ' + dims : ''}</span>` : ''}
+      ${!isNeutral(p.adjust) ? '<span class="tg">colorimétrie</span>' : ''}
+      ${cur && cur.lumFinal != null ? `<span>lum. ${cur.lumFinal}/100</span>` : ''}
+      ${cur && cur.cost ? `<span>${cur.cost.toFixed(2)} $</span>` : ''}
+      ${(p.renders || []).length > 1 ? `<span>${(p.renders || []).length} rendus</span>` : ''}
+    </div>`;
+
+    return `<div class="pane ${opts.estOriginal ? 'seul' : ''} ${selected.has(p.id) ? 'sel' : ''} ${p.status === 'error' ? 'bad' : ''}" data-pane="${p.id}">
+      <div class="phead">
+        ${p.kind === 'video' ? '' : `<input type="checkbox" data-pick="${p.id}" ${selected.has(p.id) ? 'checked' : ''} aria-label="Sélectionner ${esc(nom)}" />`}
+        <span class="plab ${index > 0 ? 'new' : ''}">${esc(titre)}</span>
+        <span class="grow"></span>
+        ${p.kind === 'video' ? '' : `<button class="picon" data-loupe="${p.id}" title="Ouvrir en grand pour comparer et régler">⤢ régler</button>`}
+        <button class="picon x" data-del="${p.id}" title="Retirer du plan">✕</button>
+      </div>
+      ${corps}${opts.estOriginal ? `<div class="pstats"><span>${esc(p.sourceName)}</span></div>` : stats}
+    </div>`;
+  }
+
+  function bindGrille() {
+    document.querySelectorAll('[data-filtre]').forEach((el) => {
+      if (el.dataset.lie === '1') return;
+      el.dataset.lie = '1';
+      el.addEventListener('click', () => { filtre = el.dataset.filtre; renderGrille(); });
+    });
+
+    // Une ligne reutilisee garde ses ecouteurs : sans ce garde-fou, chaque
+    // sondage en rajoutait un et un clic basculait la selection plusieurs fois.
+    document.querySelectorAll('[data-pick]').forEach((el) => {
+      if (el.dataset.lie === '1') return;
+      el.dataset.lie = '1';
+      el.addEventListener('click', (e) => {
+        try {
+          const id = el.dataset.pick;
+          // Maj-clic : toute la plage depuis le dernier clic, dans l'ordre
+          // d'affichage, lignes et volets confondus.
+          if (e.shiftKey && dernierClic && dernierClic !== id) {
+            const a = ordre.indexOf(dernierClic), b = ordre.indexOf(id);
+            if (a >= 0 && b >= 0) {
+              for (const x of ordre.slice(Math.min(a, b), Math.max(a, b) + 1)) {
+                const q = parId(x);
+                if (q && q.kind !== 'video') selected.add(x);
+              }
+            }
+          } else if (el.checked) selected.add(id);
+          else selected.delete(id);
+          dernierClic = id;
+          renderGrille();
+        } catch (err) { signalerBug('à la sélection', err); }
+      });
+    });
+
+    document.querySelectorAll('[data-loupe]').forEach((el) => {
+      if (el.dataset.lie === '1') return;
+      el.dataset.lie = '1';
+      el.addEventListener('click', () => ouvrirDetail(el.dataset.loupe));
+    });
+
+    document.querySelectorAll('[data-del]').forEach((el) => {
+      if (el.dataset.lie === '1') return;
+      el.dataset.lie = '1';
+      el.addEventListener('click', () => supprimer(el.dataset.del));
+    });
+  }
+
+  $('gAll').addEventListener('click', () => {
+    for (const id of ordre) { const p = parId(id); if (p && p.kind !== 'video') selected.add(id); }
+    renderGrille();
+  });
+
+  $('gNone').addEventListener('click', () => { selected.clear(); renderGrille(); });
+
+  // ---------- Vue de détail ----------
+  function ouvrirDetail(id) {
+    detailId = id;
+    cmpPos = 50; cmpFlip = false;
+    $('detail').classList.add('on');
+    renderDetail();
+  }
+  function fermerDetail() {
+    detailId = null;
+    $('detail').classList.remove('on');
+  }
+  $('dClose').addEventListener('click', fermerDetail);
+  $('detail').addEventListener('click', (e) => { if (e.target === $('detail')) fermerDetail(); });
+
+  // Navigation clavier : c'est ce qui rend l'outil tenable sur trente photos.
+  document.addEventListener('keydown', (e) => {
+    if (!$('scPlan').classList.contains('active')) return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    if (detailId) {
+      if (e.key === 'Escape') { fermerDetail(); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { voisin(1); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { voisin(-1); e.preventDefault(); }
+      if (e.key === ' ') { basculer(detailId); e.preventDefault(); }
+      // B : bascule d'un coup entre avant et apres. En pratique c'est ce qu'on
+      // utilise le plus pour juger une retouche, plus que le glissement lent.
+      if (e.key === 'b' || e.key === 'B') {
+        cmpFlip = !cmpFlip;
+        cmpPos = cmpFlip ? 100 : 0; // 0 = apres en entier, 100 = avant en entier
+        const o = $('cmpOver'), h = $('cmpH');
+        if (o && h) { o.style.clipPath = `inset(0 0 0 ${cmpPos}%)`; h.style.left = cmpPos + '%'; }
+        e.preventDefault();
+      }
+    } else if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+      $('gAll').click(); e.preventDefault();
+    }
+  });
+
+  function voisin(pas) {
+    const i = ordre.indexOf(detailId);
+    const j = i + pas;
+    if (i < 0 || j < 0 || j >= ordre.length) return;
+    detailId = ordre[j];
+    renderDetail();
+  }
+  function basculer(id) {
+    const p = parId(id);
+    if (!p || p.kind === 'video') return;
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    renderGrille();
+    if (detailId) renderDetail();
+  }
+
+  $('dPrev').addEventListener('click', () => voisin(-1));
+  $('dNext').addEventListener('click', () => voisin(1));
+  $('dDel').addEventListener('click', () => supprimer(detailId));
+
+  function renderDetail() {
+    const p = parId(detailId);
+    if (!p) return fermerDetail();
+    const g = lignees().find((x) => x.versions.some((v) => v.id === p.id));
+    const cur = (p.renders || []).find((r) => r.id === p.currentRenderId);
+    const a = regl(p);
+    const nom = [p.base, ...(p.suffixes || [])].join('_');
+    const i = ordre.indexOf(p.id);
+
+    $('dNom').textContent = nom;
+    $('dDet').innerHTML = [
+      i >= 0 ? `${i + 1} / ${ordre.length}` : '',
+      cur ? esc(cur.promptLabel) : 'aucune retouche',
+      cur && cur.ext ? cur.ext.toUpperCase() + (cur.largeur ? ` ${cur.largeur}×${cur.hauteur}` : '') : '',
+      cur && cur.cost ? `${cur.cost.toFixed(2)} $` : '',
+      selected.has(p.id) ? 'sélectionnée' : '',
+    ].filter(Boolean).join(' · ');
+    $('dPrev').disabled = i <= 0;
+    $('dNext').disabled = i < 0 || i >= ordre.length - 1;
+    $('dModeGliss').classList.toggle('on', cmpMode === 'gliss');
+    $('dModeCote').classList.toggle('on', cmpMode === 'cote');
+    $('dHint').textContent = cmpMode === 'gliss'
+      ? 'Fais glisser la poignée, ou flèches ← → après un clic. Touche B pour basculer avant/après.'
+      : 'Touche B pour masquer ou montrer l\u2019original.';
+
+    const urlAvant = `/api/sessions/${session.id}/photos/${p.id}/source`;
+    const identique = !cur && isNeutral(a);
+
+    if (p.busy) {
+      $('dVue').innerHTML = '<div class="cmpwrap"><div class="vide" style="aspect-ratio:4/3;border-radius:9px;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--inkblue);font-weight:600">Génération en cours…</div></div>';
+    } else if (p.status === 'error') {
+      $('dVue').innerHTML = `<div class="cmpwrap"><div style="aspect-ratio:4/3;border-radius:9px;background:#fefaf9;display:flex;align-items:center;justify-content:center;color:var(--err);padding:20px;text-align:center">${esc(p.error || 'Échec de la génération')}</div></div>`;
+    } else if (identique) {
+      $('dVue').innerHTML = `<div class="cmpwrap"><img class="lay" src="${urlAvant}" alt="Original" />
+        <p class="sub" style="margin:10px 0 0;font-size:12px">Aucune retouche ni réglage : rien à comparer pour l\u2019instant.</p></div>`;
+    } else if (cmpMode === 'cote') {
+      $('dVue').innerHTML = `<div class="dpair">
+        <div class="dcol"><div class="dlab">Original</div><img src="${urlAvant}" alt="Original" /></div>
+        <div class="dcol"><div class="dlab">${cur ? 'Résultat · ' + esc(cur.promptLabel) : 'Avec réglages'}</div>${coucheApres(p, a)}</div>
+      </div>`;
+    } else {
+      // L'avant est la base, l'apres est rogne a DROITE de la poignee.
+      $('dVue').innerHTML = `<div class="cmpwrap"><div class="cmp" id="cmp">
+        <img class="base" src="${urlAvant}" alt="Original" />
+        ${coucheApres(p, a)}
+        <div class="poignee" id="cmpH" style="left:${cmpPos}%"></div>
+        <span class="etiq g">avant</span><span class="etiq d">après</span>
+      </div></div>`;
+    }
+
+    // Bande des versions : l'original puis chaque version de la lignee, avec
+    // defilement horizontal. C'est ce qui permet de comparer plusieurs prompts
+    // sur la meme photo, ce que la grille ne peut pas faire.
+    $('dVersions').innerHTML = g.versions.map((v) => {
+      const vc = (v.renders || []).find((r) => r.id === v.currentRenderId);
+      const lab = v.suffixes && v.suffixes.length
+        ? v.suffixes[v.suffixes.length - 1]
+        : (vc ? vc.promptLabel : 'original');
+      const vign = v.busy
+        ? '<div class="vph">en cours…</div>'
+        : v.status === 'error'
+          ? '<div class="vph">échec</div>'
+          : `<img src="${urlPhoto(v, 240)}" alt="${esc(lab)}" loading="lazy" />`;
+      return `<button class="vitem ${v.id === p.id ? 'on' : ''}" data-ver="${v.id}" title="${esc(lab)}">
+        ${vign}<span class="vl">${esc(lab)}</span></button>`;
+    }).join('');
+
+    $('dSliders').innerHTML = CHAMPS.map((c) => `
+      <div class="slider">
+        <label for="sl-${c}">${LIBELLES[c]}</label>
+        <input type="range" id="sl-${c}" min="-100" max="100" step="1" value="${a[c]}" data-champ="${c}" />
+        <output>${a[c] > 0 ? '+' : ''}${a[c]}</output>
+      </div>`).join('');
+    $('dSave').disabled = !reglagesLocaux.has(p.id);
+    if ($('dStyle').innerHTML !== $('rStyle').innerHTML) {
+      const garde = $('dStyle').value;
+      $('dStyle').innerHTML = $('rStyle').innerHTML;
+      if (garde) $('dStyle').value = garde;
+    }
+    majDetailLibre();
+
+    bindDetail();
+    if (!isNeutral(a) && !p.busy && p.status !== 'error') dessiner(p.id);
+  }
+
+  // Couche "apres" : un canvas si des reglages sont actifs, une image sinon.
+  // En mode glissement elle est superposee et rognee ; en cote a cote elle
+  // occupe sa colonne.
+  function coucheApres(p, a) {
+    const enGliss = cmpMode === 'gliss';
+    const cls = enGliss ? 'apres' : '';
+    const clip = enGliss ? ` style="clip-path: inset(0 0 0 ${cmpPos}%)"` : '';
+    const id = enGliss ? ' id="cmpOver"' : '';
+    return isNeutral(a)
+      ? `<img class="${cls}"${id}${clip} src="${urlPhoto(p, 700)}" alt="Après" />`
+      : `<canvas class="${cls}"${id}${clip} data-canvas="${p.id}"></canvas>`;
+  }
+
+  function bindDetail() {
+    let attente = null;
+    document.querySelectorAll('#dSliders [data-champ]').forEach((el) =>
+      el.addEventListener('input', () => {
+        const p = parId(detailId);
+        if (!p) return;
+        const a = { ...regl(p), [el.dataset.champ]: Number(el.value) };
+        const etaitNeutre = isNeutral(regl(p));
+        reglagesLocaux.set(p.id, a);
+        el.parentElement.querySelector('output').textContent = (Number(el.value) > 0 ? '+' : '') + el.value;
+        $('dSave').disabled = false;
+        // Premier mouvement depuis l'etat neutre : la vue passe d'une image a
+        // un canvas, donc il faut la reconstruire une fois.
+        if (etaitNeutre || !document.querySelector(`[data-canvas="${p.id}"]`)) {
+          renderDetail();
+          return;
+        }
+        if (attente) cancelAnimationFrame(attente);
+        attente = requestAnimationFrame(() => dessiner(p.id));
+      }));
+
+    // Bande des versions : change la version active, dans le detail ET dans
+    // la grille, puisque c'est elle que les actions de lot cibleront.
+    document.querySelectorAll('#dVersions [data-ver]').forEach((el) =>
+      el.addEventListener('click', () => {
+        detailId = el.dataset.ver;
+        renderDetail();
+      }));
+
+    if (cmpMode === 'gliss') brancherGlissement();
+  }
+
+  // Glissement.
+  //
+  // Trois choix pour la fluidite :
+  //   - l'ecoute du deplacement est sur la FENETRE, pas sur le cadre : sortir
+  //     de l'image en glissant ne perd plus le suivi ;
+  //   - une seule ecriture par image ecran, via requestAnimationFrame, plutot
+  //     qu'une par evenement pointeur (il en arrive plus de 100 par seconde) ;
+  //   - aucune transition CSS sur le rognage, sinon la couche traine.
+  function brancherGlissement() {
+    const c = $('cmp');
+    if (!c) return;
+
+    let xEnAttente = null;
+    let cadre = null;
+
+    const peindre = () => {
+      cadre = null;
+      if (xEnAttente == null) return;
+      const r = c.getBoundingClientRect();
+      if (!r.width) return;
+      cmpPos = Math.max(0, Math.min(100, ((xEnAttente - r.left) / r.width) * 100));
+      const o = $('cmpOver'), h = $('cmpH');
+      if (o) o.style.clipPath = `inset(0 0 0 ${cmpPos}%)`;
+      if (h) h.style.left = cmpPos + '%';
+    };
+
+    const suivre = (e) => {
+      xEnAttente = e.clientX;
+      if (!cadre) cadre = requestAnimationFrame(peindre);
+    };
+
+    const relacher = () => {
+      c.classList.remove('prise');
+      window.removeEventListener('pointermove', suivre);
+      window.removeEventListener('pointerup', relacher);
+      window.removeEventListener('pointercancel', relacher);
+    };
+
+    c.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); // sinon le navigateur demarre un glisser-deposer d'image
+      c.classList.add('prise');
+      suivre(e);
+      window.addEventListener('pointermove', suivre);
+      window.addEventListener('pointerup', relacher);
+      window.addEventListener('pointercancel', relacher);
+    });
+
+    // Fleches gauche/droite quand la comparaison a le focus : reglage au pixel.
+    c.tabIndex = 0;
+    c.addEventListener('keydown', (e) => {
+      const pas = e.shiftKey ? 10 : 2;
+      if (e.key === 'ArrowLeft') cmpPos = Math.max(0, cmpPos - pas);
+      else if (e.key === 'ArrowRight') cmpPos = Math.min(100, cmpPos + pas);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+      const o = $('cmpOver'), h = $('cmpH');
+      if (o) o.style.clipPath = `inset(0 0 0 ${cmpPos}%)`;
+      if (h) h.style.left = cmpPos + '%';
+    });
+  }
+
+  $('dModeGliss').addEventListener('click', () => { cmpMode = 'gliss'; renderDetail(); });
+  $('dModeCote').addEventListener('click', () => { cmpMode = 'cote'; renderDetail(); });
+
+  // Lancer un prompt sur la seule photo ouverte, sans repasser par la grille :
+  // c'est dans le detail qu'on itere.
+  // Le menu du detail contient aussi "Ecrire un prompt". Avant, il envoyait
+  // la valeur "__libre__" au serveur comme s'il s'agissait d'un identifiant
+  // de prompt, sans zone de texte : le lancement echouait systematiquement.
+  function majDetailLibre() {
+    const libre = $('dStyle').value === '__libre__';
+    $('dLibre').style.display = libre ? 'flex' : 'none';
+    $('dRun').disabled = libre && !$('dPrompt').value.trim();
+    if (libre) $('dPrompt').focus();
+  }
+  $('dStyle').addEventListener('change', majDetailLibre);
+  $('dPrompt').addEventListener('input', () => {
+    $('dRun').disabled = $('dStyle').value === '__libre__' && !$('dPrompt').value.trim();
+  });
+
+  $('dRun').addEventListener('click', async () => {
+    const p = parId(detailId);
+    if (!p) return;
+    const libre = $('dStyle').value === '__libre__';
+    if (libre && !$('dPrompt').value.trim()) {
+      return showErr('planErr', 'Écris ton prompt avant de lancer.');
+    }
+    $('dRun').disabled = true;
+    $('dRun').textContent = 'Lancement…';
+    try {
+      const corps = {
+        photoIds: [p.id], model: FIXED_MODEL,
+        from: $('dFrom').value, mode: $('dMode').value,
+      };
+      if (libre) {
+        corps.prompt = $('dPrompt').value.trim();
+        corps.promptLabel = $('dLabel').value.trim();
+      } else {
+        corps.style = $('dStyle').value;
+      }
+      await api(`/api/sessions/${session.id}/rerun`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps),
+      });
+      startPolling();
+    } catch (e) { showErr('planErr', e.message); }
+    finally { $('dRun').disabled = false; $('dRun').textContent = 'Lancer sur cette photo'; }
+  });
+
+  function chargerImage(id, src) {
+    if (imgCache.has(id + src)) return Promise.resolve(imgCache.get(id + src));
+    return new Promise((ok, ko) => {
+      const im = new Image();
+      im.onload = () => { imgCache.set(id + src, im); ok(im); };
+      im.onerror = () => ko(new Error('image illisible'));
+      im.src = src;
+    });
+  }
+
+  async function dessiner(photoId) {
+    const cv = document.querySelector(`[data-canvas="${photoId}"]`);
+    const p = parId(photoId);
+    if (!cv || !p) return;
+    try {
+      const src = urlPhoto(p, 700);
+      const im = await chargerImage(photoId, src);
+      cv.width = im.naturalWidth;
+      cv.height = im.naturalHeight;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(im, 0, 0);
+      const px = ctx.getImageData(0, 0, cv.width, cv.height);
+      applyToPixels(px.data, regl(p), 4);
+      ctx.putImageData(px, 0, 0);
+      const lum = luminanceMoyenne(px.data, 4);
+      $('dDet').innerHTML = $('dDet').innerHTML.replace(/ · lum\. \d+\/100/, '') + ` · lum. ${lum}/100`;
+    } catch { /* image pas encore prête */ }
+  }
+
+  $('dSave').addEventListener('click', () => enregistrerReglages([detailId], regl(parId(detailId))));
+  $('dReset').addEventListener('click', () => {
+    reglagesLocaux.delete(detailId);
+    enregistrerReglages([detailId], { ...DEFAULTS });
+  });
+  $('dBulk').addEventListener('click', () => {
+    const cibles = [...selected].filter((x) => { const q = parId(x); return q && q.kind !== 'video'; });
+    if (cibles.length === 0) return showErr('planErr', "Sélectionne d'abord les photos dans la grille.");
+    enregistrerReglages([...new Set([detailId, ...cibles])], regl(parId(detailId)));
+  });
+
+  async function enregistrerReglages(photoIds, adjust) {
+    try {
+      await api(`/api/sessions/${session.id}/adjust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoIds, adjust }),
+      });
+      for (const id of photoIds) reglagesLocaux.delete(id);
+      session = await api('/api/sessions/' + sessionId);
+      render();
+    } catch (e) { showErr('planErr', e.message); }
+  }
+
+  async function supprimer(id) {
+    try {
+      await api(`/api/sessions/${session.id}/photos/${id}`, { method: 'DELETE' });
+      selected.delete(id);
+      if (detailId === id) {
+        const i = ordre.indexOf(id);
+        detailId = ordre[i + 1] || ordre[i - 1] || null;
+        if (!detailId) fermerDetail();
+      }
+      session = await api('/api/sessions/' + sessionId);
+      render();
+    } catch (e) { showErr('planErr', e.message); }
+  }
+
+  // ---------- Barre d'action ----------
+  function majLibre() {
+    const libre = $('rStyle').value === '__libre__';
+    $('fLibre').classList.toggle('on', libre);
+    if (libre) $('rPrompt').focus();
+  }
+  ['rStyle', 'rFrom', 'rMode'].forEach((id) => $(id).addEventListener('change', () => { majLibre(); majBarre(); }));
+  ['rPrompt', 'rLabel'].forEach((id) => $(id).addEventListener('input', majBarre));
+
+  function majBarre() {
+    const n = selected.size;
+    // La barre reste VISIBLE meme sans selection : c'est ainsi qu'on decouvre
+    // qu'il faut selectionner. Une barre qui n'apparait qu'apres selection ne
+    // s'explique pas toute seule.
+    const pret = n > 0 && session && session.status !== 'validated';
+    if (!pret) {
+      $('abNote').innerHTML = session && session.status === 'validated'
+        ? 'Session envoyée.'
+        : 'Coche une ou plusieurs photos ci-dessous, puis lance le prompt choisi.';
+      $('btnRun').disabled = true;
+      $('btnRun').textContent = 'Lancer';
+      return;
+    }
+    if (nbPrompts === 0) {
+      $('abNote').innerHTML =
+        '<b>Aucun prompt chargé.</b> Le catalogue Notion n\u2019a pas répondu. ' +
+        'Tu peux écrire un prompt libre en attendant. Recharge la page pour réessayer.';
+      $('rStyle').innerHTML = '<option value="__libre__">✏️ Écrire un prompt…</option>';
+      $('rStyle').value = '__libre__';
+      $('fLibre').classList.add('on');
+    }
+    const libre = $('rStyle').value === '__libre__';
+    const nom = libre
+      ? ($('rLabel').value.trim() || 'ton prompt')
+      : ($('rStyle').selectedOptions[0] ? $('rStyle').selectedOptions[0].textContent : '');
+    const depart = $('rFrom').value === 'current' ? "l'image actuelle" : "la photo d'origine";
+    const effet = $('rMode').value === 'duplicate'
+      ? `<b>${n} variante${n > 1 ? 's' : ''}</b> s'ajouteront au plan`
+      : `les <b>${n} image${n > 1 ? 's' : ''}</b> sélectionnée${n > 1 ? 's' : ''} seront remplacée${n > 1 ? 's' : ''}, l'original reste intact`;
+    const manque = libre && !$('rPrompt').value.trim() ? ' <b>Écris ton prompt pour lancer.</b>' : '';
+    if (nbPrompts > 0) {
+      $('abNote').innerHTML = `<b>${esc(nom)}</b> à partir de ${depart}. ${effet}.${manque}`;
+    }
+    // Le coût annoncé sur le bouton, pas dans une note qu'on ne lit pas.
+    $('btnRun').textContent = `Lancer · ${n} génération${n > 1 ? 's' : ''}`;
+    $('btnRun').disabled = libre && !$('rPrompt').value.trim();
+  }
+
+  $('btnRun').addEventListener('click', async () => {
+    const libelle = $('btnRun').textContent;
+    $('btnRun').disabled = true;
+    $('btnRun').textContent = 'Lancement…';
+    $('planErr').classList.remove('show');
+    try {
+      const libre = $('rStyle').value === '__libre__';
+      const ids = [...selected].filter((id) => { const p = parId(id); return p && p.kind !== 'video'; });
+      if (ids.length === 0) throw new Error('Aucune photo sélectionnée.');
+      const corps = { photoIds: ids, model: FIXED_MODEL, from: $('rFrom').value, mode: $('rMode').value };
+      if (libre) {
+        const txt = $('rPrompt').value.trim();
+        if (!txt) throw new Error('Écris ton prompt avant de lancer.');
+        corps.prompt = txt; corps.promptLabel = $('rLabel').value.trim();
+      } else corps.style = $('rStyle').value;
+
+      await api(`/api/sessions/${session.id}/rerun`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps),
+      });
+      selected.clear();
+      startPolling();
+    } catch (e) {
+      showErr('planErr', e.message);
+    } finally {
+      $('btnRun').disabled = false;
+      $('btnRun').textContent = libelle;
+    }
+  });
+
+  // ---------- Validation ----------
+  function majValidation() {
+    const b = $('valbox');
+    if (session.status === 'validating') {
+      const p = session.validateProgress || {};
+      const done = p.done || 0, total = p.total || 0;
+      b.innerHTML = `Envoi en cours : <b>${done} / ${total}</b>
+        <span class="bar"><i style="width:${total ? Math.round((done / total) * 100) : 0}%"></i></span>`;
+      b.classList.add('show');
+      $('validate').disabled = true;
+      $('validate').textContent = 'Envoi en cours…';
+      return;
+    }
+    b.classList.remove('show');
+    $('validate').textContent = 'Valider et envoyer';
+    const livrables = photos().filter((p) =>
+      p.status !== 'deleted' && p.status !== 'error' &&
+      (p.kind === 'video' || p.currentRenderId || (p.renders || []).length === 0)).length;
+    $('validate').disabled = session.status === 'running' || livrables === 0 || session.status === 'validated';
+  }
+
+  $('validate').addEventListener('click', async () => {
+    $('validate').disabled = true;
+    $('validate').textContent = 'Envoi en cours…';
+    $('planErr').classList.remove('show');
+    $('valbox').textContent = 'Validation lancée…';
+    $('valbox').classList.add('show');
+    fermerDetail();
+    try {
+      await api(`/api/sessions/${session.id}/validate`, { method: 'POST' });
+      startPolling();
+    } catch (e) {
+      showErr('planErr', e.message);
+      $('valbox').classList.remove('show');
+      $('validate').disabled = false;
+      $('validate').textContent = 'Valider et envoyer';
+    }
+  });
+
+  $('lienRetour').addEventListener('click', (e) => { e.preventDefault(); clearInterval(poll); ouvrirListe(); });
+
+  chargerIdentite();
+  loadCatalogues().catch((e) => showErr('setupErr', e.message));
+</script>
+</body>
+</html>

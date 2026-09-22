@@ -1,0 +1,19 @@
+{
+  "name": "joy-contenus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gestion unifiee des contenus d'etablissement : import (Drive, fichiers, liens sociaux), retouche IA, format vitrine, livraison Drive ou zip.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@flora-ai/flora": "0.7.1",
+    "express": "^5.2.1",
+    "googleapis": "^173.0.0",
+    "sharp": "^0.34.5"
+  }
+}
