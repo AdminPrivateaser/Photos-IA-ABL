@@ -425,6 +425,7 @@
       <span class="nom" id="dNom"></span>
       <span class="det" id="dDet"></span>
       <span class="grow"></span>
+      <a class="navbtn" id="dDownload" download title="Télécharger cette photo seule">⬇ télécharger</a>
       <button class="navbtn" id="dPrev">← précédente</button>
       <button class="navbtn" id="dNext">suivante →</button>
       <button class="navbtn" id="dClose">Fermer</button>
@@ -789,6 +790,8 @@
         }
       }
       sessionId = d.sessionId;
+      etabEditEmpreinte = null;
+      etabFormOuvert = false;
       montrer('plan');
       startPolling();
     } catch (e) {
@@ -863,13 +866,17 @@
   }
 
   function ligneSession(s) {
-    // Le nom du dossier de depart EST le nom du shooting : c'est lui qu'on
-    // cherche quand on veut retrouver une ancienne session. L'etablissement
-    // vient en complement, pas a la place.
-    const nom = s.folderName && s.folderName !== 'Import'
-      ? s.folderName
-      : (s.etab && s.etab.nom) || (s.mode === 'links' ? 'Import par liens' : 'Fichiers déposés');
-    const sousTitre = s.etab && s.etab.nom && s.etab.nom !== nom ? `${s.etab.id} · ${s.etab.nom}` : '';
+    // Beaucoup de dossiers de depart partagent le meme nom generique
+    // ("Contenus Growth") d'un client a l'autre : c'est l'etablissement,
+    // detecte via le dossier parent, qui identifie vraiment la session.
+    // Quand il est connu, il passe devant ; le nom du dossier reste affiche
+    // a cote pour qu'on retrouve aussi une session par son intitule d'origine.
+    const dossier = s.folderName && s.folderName !== 'Import' ? s.folderName : null;
+    const etabNom = s.etab && s.etab.nom;
+    const nom = etabNom && dossier && etabNom !== dossier
+      ? `${etabNom} · ${dossier}`
+      : etabNom || dossier || (s.mode === 'links' ? 'Import par liens' : 'Fichiers déposés');
+    const sousTitre = s.etab && s.etab.id ? `${s.etab.id}` : '';
     const d = new Date(s.updatedAt);
     const quand = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
       + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -903,6 +910,8 @@
     selected.clear();
     imgCache.clear();
     reglagesLocaux.clear();
+    etabEditEmpreinte = null;
+    etabFormOuvert = false;
     montrer('plan');
     startPolling();
   }
@@ -987,14 +996,25 @@
   // Établissement modifiable + compléter la session, directement sur l'écran
   // Import : répond au besoin de revenir corriger l'établissement ou ajouter
   // des photos oubliées sans perdre la session déjà créée.
+  let etabEditEmpreinte = null;
+  let etabFormOuvert = false;
   function renderEtabEdit(s) {
     const box = $('etabEditBlock');
-    if (!s || s.status === 'validated') { box.innerHTML = ''; return; }
+    if (!s || s.status === 'validated') { etabEditEmpreinte = null; etabFormOuvert = false; box.innerHTML = ''; return; }
+
+    // Reconstruit toutes les 2 s par le sondage tant qu'une génération
+    // tourne : si rien de ce qui s'affiche ici n'a changé, on ne touche pas
+    // au DOM, pour ne pas fermer le petit formulaire "modifier" si quelqu'un
+    // l'avait ouvert, et pour ne pas faire bouger la hauteur de ce bloc
+    // (donc le reste de la page) sans raison.
+    const emp = JSON.stringify([s.mode, s.etab]);
+    if (emp === etabEditEmpreinte) return;
+    etabEditEmpreinte = emp;
 
     const etabTxt = s.etab ? `${esc(s.etab.id)} - ${esc(s.etab.nom)}` : 'non défini';
-    const ajouterBtn = s.mode === 'drive'
-      ? `<button class="mini" id="btnRefreshDrive" type="button">+ Récupérer les nouvelles photos du dossier</button>`
-      : `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter des médias</button>`;
+    const ajouterBtn = s.mode === 'links'
+      ? `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter des médias</button>`
+      : '';
 
     box.innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1002,8 +1022,16 @@
         <button class="mini" id="btnEtabModifier" type="button">modifier</button>
         ${ajouterBtn}
       </div>
-      ${s.mode === 'drive' ? '<p class="hint" style="margin:6px 0 0">As-tu déposé de nouvelles photos dans le dossier Drive de départ après avoir lancé cette session ? Ce bouton va les chercher et les ajoute ici, sans perdre ce qui est déjà en cours.</p>' : ''}
-      <div id="etabModifierForm" style="display:none;margin-top:10px;max-width:340px">
+      ${s.mode === 'drive' ? `
+        <div id="dropDriveMedia" tabindex="0" role="button"
+             style="margin-top:10px;border:2px dashed var(--line);border-radius:10px;padding:14px;
+                    text-align:center;color:var(--muted);font-size:13px;cursor:pointer">
+          Glisse une photo ici pour l'ajouter à cette session<br />
+          <small>Elle sera aussi envoyée dans ton dossier Drive de départ.</small>
+        </div>
+        <input type="file" id="dropDriveInput" accept="image/*,video/*" multiple hidden />
+      ` : ''}
+      <div id="etabModifierForm" style="display:${etabFormOuvert ? 'block' : 'none'};margin-top:10px;max-width:340px">
         <label for="etabEditId">ID</label>
         <input type="text" id="etabEditId" value="${s.etab ? esc(s.etab.id) : ''}" />
         <label for="etabEditNom">Nom</label>
@@ -1012,8 +1040,8 @@
       </div>`;
 
     $('btnEtabModifier').addEventListener('click', () => {
-      const f = $('etabModifierForm');
-      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+      etabFormOuvert = !etabFormOuvert;
+      $('etabModifierForm').style.display = etabFormOuvert ? 'block' : 'none';
     });
 
     $('btnEtabValider').addEventListener('click', async () => {
@@ -1030,24 +1058,35 @@
     });
 
     if (s.mode === 'drive') {
-      $('btnRefreshDrive').addEventListener('click', async () => {
-        const b = $('btnRefreshDrive');
-        b.disabled = true;
-        b.textContent = 'Recherche des nouvelles photos…';
+      const dz = $('dropDriveMedia');
+      const enverMedias = async (fichiers) => {
+        const ok = [...fichiers].filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
+        if (ok.length === 0) return showErr('planErr', 'Fichier ignoré : images et vidéos uniquement.');
+        const libelle = dz.innerHTML;
+        dz.textContent = 'Envoi en cours…';
         try {
-          const d = await api(`/api/sessions/${s.id}/refresh-drive`, { method: 'POST' });
-          const n = d._nouvellesPhotos || 0;
+          const fd = new FormData();
+          for (const f of ok) fd.append('files', f);
+          const res = await fetch(`/api/sessions/${s.id}/drive-media`, { method: 'POST', body: fd });
+          const d = await res.json();
+          if (!res.ok) throw new Error(d.error || 'Envoi impossible.');
           session = d;
           render();
-          showErr('planErr', n > 0
-            ? `${n} nouvelle${n > 1 ? 's' : ''} photo${n > 1 ? 's' : ''} récupérée${n > 1 ? 's' : ''}.`
-            : "Aucune nouvelle photo dans le dossier Drive.");
         } catch (e) {
           showErr('planErr', e.message);
-          b.disabled = false;
-          b.textContent = '+ Récupérer les nouvelles photos du dossier';
+          dz.innerHTML = libelle;
         }
+      };
+      dz.addEventListener('click', () => $('dropDriveInput').click());
+      dz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('dropDriveInput').click(); } });
+      dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.borderColor = 'var(--inkblue)'; });
+      dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--line)'; });
+      dz.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dz.style.borderColor = 'var(--line)';
+        enverMedias(e.dataTransfer.files);
       });
+      $('dropDriveInput').addEventListener('change', (e) => enverMedias(e.target.files));
     } else {
       $('btnAjouterMedias').addEventListener('click', () => {
         ajoutPourSession = s.id;
@@ -1068,6 +1107,16 @@
   }
 
   function render() {
+    // Le sondage (toutes les 2 s tant qu'une génération tourne) redessine ce
+    // bloc, l'en-tête et le bandeau établissement à chaque passage — même
+    // quand rien n'y a changé. Un simple changement de hauteur au-dessus de
+    // la grille (une ligne d'erreur qui apparaît, un bouton qui change de
+    // largeur...) suffit à décaler tout ce qu'on regarde plus bas, ce qui se
+    // voit comme un retour en haut de page en pleine sélection. On mémorise
+    // la position de défilement avant de reconstruire, et on la restaure une
+    // fois la mise en page stabilisée.
+    const yAvant = window.scrollY;
+
     const ps = photos();
     const pretes = ps.filter((p) => p.status === 'ok' && !p.busy).length;
 
@@ -1123,11 +1172,27 @@
           }
         });
       }
+      restaurerScroll(yAvant);
       return;
     }
 
     renderGrille();
     if (detailId) renderDetail();
+    restaurerScroll(yAvant);
+  }
+
+  // Une image qui finit de se decoder APRES ce passage peut encore faire
+  // bouger la mise en page (et donc la position de defilement) un instant
+  // plus tard : un seul rattrapage juste apres le rendu ne suffit pas
+  // toujours. On revérifie a quelques reprises sur une courte fenetre.
+  function restaurerScroll(y) {
+    const reessayer = (fois) => {
+      requestAnimationFrame(() => {
+        if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+        if (fois > 0) setTimeout(() => reessayer(fois - 1), 60);
+      });
+    };
+    reessayer(4);
   }
 
   function renderGrille() {
@@ -1217,7 +1282,19 @@
     // La version precedente inserait le nouveau noeud sans retirer l'ancien
     // quand l'etat d'une ligne changeait : chaque generation ajoutait donc un
     // doublon de la meme photo, et le sondage en empilait a chaque passage.
-    liste.replaceChildren(...voulues);
+    //
+    // MAIS replaceChildren() detache et rattache TOUS les enfants a chaque
+    // appel, meme quand on lui redonne exactement ceux deja presents dans le
+    // meme ordre : le DOM se retrouve un instant sans grille (juste le temps
+    // du remplacement), et un navigateur scrolle deja plus bas que cette
+    // hauteur reduite recale la position en haut, sans jamais la restaurer.
+    // C'est ce qui coupait la selection en pleine page quand on cochait une
+    // case loin dans la liste : chaque clic ne change QUE l'etat coche/decoche
+    // (deja applique juste au-dessus, en place), donc "voulues" est identique
+    // aux enfants actuels neuf fois sur dix. On ne touche alors pas au DOM.
+    const actuels = [...liste.children];
+    const identique = actuels.length === voulues.length && actuels.every((el, i) => el === voulues[i]);
+    if (!identique) liste.replaceChildren(...voulues);
     bindGrille();
   }
 
@@ -1325,6 +1402,7 @@
         ${p.kind === 'video' ? '' : `<input type="checkbox" data-pick="${p.id}" ${selected.has(p.id) ? 'checked' : ''} aria-label="Sélectionner ${esc(nom)}" />`}
         <span class="plab ${index > 0 ? 'new' : ''}">${esc(titre)}</span>
         <span class="grow"></span>
+        ${p.kind === 'video' ? '' : `<a class="picon" href="/api/sessions/${sessionId}/photos/${p.id}/download" download title="Télécharger cette photo seule">⬇ télécharger</a>`}
         ${p.kind === 'video' ? '' : `<button class="picon" data-loupe="${p.id}" title="Ouvrir en grand pour comparer et régler">⤢ régler</button>`}
         <button class="picon x" data-del="${p.id}" title="Retirer du plan">✕</button>
       </div>
@@ -1451,6 +1529,7 @@
     const i = ordre.indexOf(p.id);
 
     $('dNom').textContent = nom;
+    $('dDownload').href = `/api/sessions/${sessionId}/photos/${p.id}/download`;
     $('dDet').innerHTML = [
       i >= 0 ? `${i + 1} / ${ordre.length}` : '',
       cur ? esc(cur.promptLabel) : 'aucune retouche',

@@ -17,7 +17,7 @@ import { formatVitrine, appliquerReglages } from './transforms.js';
 import { normalize as normalizeAdjust, isNeutral, CHAMPS as CHAMPS_ADJUST } from './adjust.js';
 
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'm4v']);
-const MIME = {
+export const MIME = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   heic: 'image/heic', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
   m4v: 'video/x-m4v',
@@ -343,24 +343,6 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
     });
   }
 
-  // Relit le dossier Drive de depart (mode 'drive') et ajoute au plan les
-  // images qui n'y etaient pas encore lors du chargement initial.
-  async function refreshFromDrive({ sessionId }) {
-    const session = await store.load(sessionId);
-    if (!session) throw new Error('Session introuvable.');
-    if (session.mode !== 'drive') throw new Error("Cette action n'existe que pour un import Drive.");
-    if (session.status === 'validated') throw new Error('Session déjà validée.');
-    const backend = backends.forSession(session);
-    const connus = (session.photos || []).map((p) => p.sourceRef);
-    const nouvelles = await backend.refreshSource(session, connus);
-    if (nouvelles.length === 0) return session;
-    return withSession(sessionId, (s) => {
-      for (const f of nouvelles) s.photos.push(newPhotoFromDescriptor(f));
-      if (s.status === 'validated' || s.status === 'validating') return;
-      s.status = 'ready';
-    });
-  }
-
   // Renseigne ou corrige l'établissement d'une session existante. Utile
   // surtout en mode 'links', où l'établissement conditionne la destination ;
   // sans effet fonctionnel en mode 'drive' (destination toujours 'source'),
@@ -518,7 +500,7 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
   return {
     startSession, runBatch, rerun, removePhoto,
     setFormat, setAdjust, validate, withSession,
-    addMedia, refreshFromDrive, setEtab,
+    addMedia, setEtab,
   };
 }
 

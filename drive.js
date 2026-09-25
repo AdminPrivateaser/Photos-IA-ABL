@@ -141,9 +141,26 @@ export function createDrive({ serviceAccountJson }) {
     /^\s*(.+?)\s*[([]\s*(\d{2,})\s*[)\]]\s*$/, // Le Comptoir (12345)
   ];
 
+  // Deuxieme convention, sans ID numerique : un prefixe fixe ("Growth MTA")
+  // au lieu d'un identifiant chiffre. Coexiste avec les trois formes
+  // ci-dessus, ne les remplace pas. Le prefixe est volontairement figé et
+  // verifie mot pour mot (insensible a la casse) plutot que rendu generique :
+  // un motif du type "n'importe quoi - n'importe quoi" reprendrait le risque
+  // qu'on evite deja pour "Fevrier 2026" ci-dessous.
+  const PREFIXE_FIXE = 'Growth MTA';
+  const FORME_PREFIXE = new RegExp(
+    `^\\s*${PREFIXE_FIXE.replace(/\s+/g, '\\s+')}\\s*[-–—_]\\s*(.+?)\\s*$`,
+    'i',
+  );
+
   function parseEtab(nom) {
     const brut = String(nom || '').trim();
     if (!brut) return null;
+
+    const mPrefixe = brut.match(FORME_PREFIXE);
+    if (mPrefixe && A_UNE_LETTRE.test(mPrefixe[1])) {
+      return { id: PREFIXE_FIXE, nom: mPrefixe[1].trim() };
+    }
 
     for (const [i, re] of FORMES.entries()) {
       const m = brut.match(re);
@@ -154,7 +171,7 @@ export function createDrive({ serviceAccountJson }) {
       if (A_UNE_LETTRE.test(libelle)) return { id, nom: libelle };
     }
 
-    // Pas de regle attrape-tout au-dela de ces trois formes : un dossier de
+    // Pas de regle attrape-tout au-dela de ces formes : un dossier de
     // shooting nomme "Fevrier 2026" serait pris pour l'etablissement 2026.
     return null;
   }

@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import multer from 'multer';
 
 import { config, appConfig } from './config.js';
 import { createAuth } from './auth.js';
@@ -14,11 +15,12 @@ import { createNotionPublicSource } from './notionPublic.js';
 import { createStyleSource } from './styleSource.js';
 import {
   createStore, publicSession, photoById, renderById, currentRender, aLivrer,
+  nomShooting, extLivree,
 } from './store.js';
 import { createLinksService } from './links.js';
 import { diagnostic as socialDiagnostic } from './social.js';
 import { createBackends } from './assets.js';
-import { createWorkplan } from './workplan.js';
+import { createWorkplan, MIME } from './workplan.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -57,6 +59,15 @@ const drive = createDrive({ serviceAccountJson: config.googleServiceAccountJson 
 const store = createStore({ dir: appConfig.dataDir });
 const backends = createBackends({ drive, dir: appConfig.dataDir, parentFolderId: appConfig.parentFolderId });
 const workplan = createWorkplan({ store, backends, flora, concurrency: config.concurrency });
+
+// Multer garde les octets en memoire le temps de les faire suivre vers Drive
+// (glisser-deposer sur une session Drive deja creee, cf. /drive-media
+// ci-dessous) : on ne les ecrit jamais sur le volume, ce n'est qu'un relais.
+const uploadMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 300 * 1024 * 1024, files: 30 },
+  fileFilter: (req, file, cb) => cb(null, /^(image|video)\//.test(file.mimetype)),
+});
 
 // Source des prompts. Priorite a l'API officielle ; a defaut, lecture de la
 // base publiee sur le web (voir notionPublic.js pour les limites).
@@ -253,15 +264,18 @@ app.post('/api/sessions/:id/etab', async (req, res) => {
   }
 });
 
-// --- Relire le dossier Drive de départ (mode 'drive') -----------------------
-// Reprend les fichiers ajoutés dans le dossier Drive depuis le chargement de
-// la session, sans dupliquer ceux déjà présents dans le plan.
-app.post('/api/sessions/:id/refresh-drive', async (req, res) => {
+// --- Glisser-déposer sur une session Drive déjà créée -----------------------
+// Dépose le fichier directement dans le dossier Drive de départ, puis
+// l'ajoute au plan — répond à "j'ai oublié une photo" sans repasser par
+// Drive manuellement.
+app.post('/api/sessions/:id/drive-media', uploadMedia.array('files'), async (req, res) => {
+  const files = req.files || [];
+  if (files.length === 0) {
+    return res.status(400).json({ error: 'Aucun média reçu. Images et vidéos acceptées.' });
+  }
   try {
-    const avant = (await store.load(req.params.id))?.photos?.length || 0;
-    const session = await workplan.refreshFromDrive({ sessionId: req.params.id });
-    const ajoutees = (session.photos || []).length - avant;
-    res.json({ ...publicSession(session), _nouvellesPhotos: ajoutees });
+    const session = await workplan.addMedia({ sessionId: req.params.id, files });
+    res.json(publicSession(session));
   } catch (e) {
     res.status(400).json({ error: msg(e) });
   }
@@ -534,6 +548,44 @@ app.get('/api/sessions/:id/photos/:photoId/render/:renderId', async (req, res) =
     const backend = backends.forSession(s);
     const w = tailleDemandee(req);
     await serveImage(res, `wrk:${s.id}:${r.workFileId}:${w || 'full'}`, () => backend.readWork(s, r.workFileId), w);
+  } catch (e) {
+    res.status(500).send(msg(e));
+  }
+});
+
+// --- Telechargement d'une seule photo, sans passer par Valider -------------
+// Sert le fichier reellement livre pour cette photo (le rendu retenu s'il y
+// en a un, sinon l'original), TEL QUEL — pas de recompression JPEG comme
+// pour les vignettes, pour ne pas degrader un rendu deja compresse une fois
+// par FLORA. C'est aussi la ou on corrige un defaut de longue date : la
+// route de vignette (serveImage) annonce toujours "image/jpeg", meme quand
+// le fichier reel est un PNG ; ici le type et le nom de fichier suivent
+// l'extension reelle du rendu retenu.
+app.get('/api/sessions/:id/photos/:photoId/download', async (req, res) => {
+  try {
+    const s = await store.load(req.params.id);
+    const p = s && photoById(s, req.params.photoId);
+    if (!p) return res.status(404).send('Photo introuvable.');
+    if (p.kind === 'video') return res.status(415).send('Cette action ne concerne que les images.');
+
+    const backend = backends.forSession(s);
+    const r = currentRender(p);
+    const buffer = r && r.workFileId
+      ? await backend.readWork(s, r.workFileId)
+      : await backend.readSource(s, p);
+
+    const ext = extLivree(p);
+    const nomFichier = nomShooting(p, ext);
+    // Deux formes dans l'en-tete : une ASCII de repli, et la forme encodee
+    // (RFC 5987) que les navigateurs modernes preferent, pour ne pas casser
+    // le telechargement si le nom contient un accent.
+    const nomAscii = nomFichier.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
+    res.set('Content-Type', MIME[ext] || 'application/octet-stream');
+    res.set(
+      'Content-Disposition',
+      `attachment; filename="${nomAscii}"; filename*=UTF-8''${encodeURIComponent(nomFichier)}`,
+    );
+    res.send(buffer);
   } catch (e) {
     res.status(500).send(msg(e));
   }

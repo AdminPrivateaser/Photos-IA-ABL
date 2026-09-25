@@ -131,18 +131,20 @@ export function createDriveBackend({ drive, parentFolderId }) {
     readSource: (session, photo) => drive.download(photo.sourceRef),
     readWork: (session, ref) => drive.download(ref),
 
-    // Relit le dossier Drive de depart et renvoie les images qui n'y etaient
-    // pas encore : reponse a "j'ai ajoute des photos dans le dossier apres
-    // avoir lance la session".
-    async refreshSource(session, dejaConnus) {
+    // Depose un media glisse dans l'app DIRECTEMENT dans le dossier Drive de
+    // depart de la session, puis le traite comme n'importe quelle photo du
+    // dossier : le fichier existe reellement dans le Drive du CSM, pas
+    // seulement dans la session, les deux restent donc toujours synchronises.
+    async addSource(session, files) {
       if (!session.source || !session.source.folderId) {
         throw new Error('Aucun dossier Drive de départ pour cette session.');
       }
-      const images = await drive.listImages(session.source.folderId);
-      const connus = new Set(dejaConnus);
-      return images
-        .filter((img) => !connus.has(img.id))
-        .map((img) => ({ sourceRef: img.id, sourceName: img.name, mimeType: img.mimeType }));
+      const photos = [];
+      for (const f of files) {
+        const uploade = await drive.upload(f.originalname, f.mimetype, f.buffer, session.source.folderId);
+        photos.push({ sourceRef: uploade.id, sourceName: f.originalname, mimeType: f.mimetype });
+      }
+      return photos;
     },
 
     async writeWork(session, { name, mimeType, buffer }) {
