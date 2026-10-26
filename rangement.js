@@ -4,6 +4,7 @@
 //
 //   Origine des originaux, ranges DES L'IMPORT :
 //     - liens (reseaux sociaux) -> « Social media » de l'etablissement
+//       (ou « Social media / <date> » avec l'option socialParDate)
 //     - fichiers deposes        -> « Contenu gérant / 19 octobre 2026 »
 //     - dossier Drive           -> deja dans le Drive, rien a faire
 //   Les dossiers « Social media » et « Contenu gérant » sont retrouves sans
@@ -54,7 +55,7 @@ export function provenance(session, p) {
   return 'drive';
 }
 
-export function createRangement({ drive, store, backends, withSession }) {
+export function createRangement({ drive, store, backends, withSession, socialParDate = false }) {
   // --- File d'attente par session ----------------------------------------
   const files = new Map();
   function enFile(sessionId, fn) {
@@ -140,7 +141,14 @@ export function createRangement({ drive, store, backends, withSession }) {
   async function dossierOriginaux(sessionId, session, prov) {
     const etabId = session.etab && session.etab.folderId;
     if (!etabId) throw new Error("Aucun dossier Drive relie a l'etablissement.");
-    if (prov === 'social') return dossier(sessionId, etabId, NOM_SOCIAL, { souple: true });
+    if (prov === 'social') {
+      const social = await dossier(sessionId, etabId, NOM_SOCIAL, { souple: true });
+      if (!socialParDate) return social;
+      // Option (version ABL) : un sous-dossier par jour d'import, comme pour
+      // « Contenu gérant ».
+      const jourS = await dossier(sessionId, social.id, dateLongue(new Date()));
+      return { ...jourS, name: `${social.name} / ${jourS.name}` };
+    }
     const gerant = await dossier(sessionId, etabId, NOM_GERANT, { souple: true });
     const jour = await dossier(sessionId, gerant.id, dateLongue(new Date()));
     return { ...jour, name: `${gerant.name} / ${jour.name}` }; // nom affiche avec son chemin

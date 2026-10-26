@@ -32,8 +32,8 @@ export const MIME = {
   m4v: 'video/x-m4v',
 };
 
-export function createWorkplan({ store, backends, flora, drive = null, concurrency = 4 }) {
-  const rangement = drive ? createRangement({ drive, store, backends, withSession }) : null;
+export function createWorkplan({ store, backends, flora, drive = null, concurrency = 4, socialParDate = false }) {
+  const rangement = drive ? createRangement({ drive, store, backends, withSession, socialParDate }) : null;
   // Range les originaux d'un import (liens, fichiers deposes) en tache de
   // fond : un souci Drive ne doit pas bloquer l'ouverture du plan.
   function archiverEnFond(session, ids) {

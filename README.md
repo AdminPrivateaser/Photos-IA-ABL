@@ -4,7 +4,7 @@ Version de l'outil de retouche photo destinée au prestataire ABL. On importe de
 
 Cette version est construite sur le même code que l'outil CX (dépôt `photo-vitrine`). Seuls les réglages propres au prestataire diffèrent (voir « Différences avec l'outil CX »). Une correction faite dans l'outil CX peut donc être reportée ici telle quelle, fichier par fichier, sauf pour les fichiers listés dans cette section.
 
-La version déployée s'affiche en haut à droite de l'outil (par exemple `v2-abl`).
+La version déployée s'affiche en haut à droite de l'outil (par exemple `v2.1-abl-shooting`).
 
 ---
 
@@ -13,14 +13,15 @@ La version déployée s'affiche en haut à droite de l'outil (par exemple `v2-ab
 | | CX (interne) | ABL (prestataire) |
 |---|---|---|
 | Connexion | Google, comptes @joy.io / @privateaser.com | Identifiant + mot de passe, compte unique |
-| Import | Dossier Drive, fichiers déposés, liens | Dossier Drive, liens (pas de dépôt de fichiers) |
+| Import | Dossier Drive, fichiers déposés, liens | Dossier Drive, **nouveau shooting (zip Shoootin)**, liens |
+| Rangement des liens | `Social media` | `Social media / <date du jour>` |
 | Prompts | Base Notion « Prompts retouche photo » | Base Notion dédiée, via `NOTION_PUBLIC_PAGE` |
 | Modèle IA | Choix entre plusieurs modèles | Nano Banana Pro fixé, pas de sélecteur |
 | Coût FLORA | Affiché | Masqué |
 | « En partant de » / « et en » | Toujours visibles | Repliés dans « Réglages avancés » |
 | Suivi Google Sheet | Oui (`tracker.js`, `stats.js`) | Non, traité autrement |
 
-Fichiers propres à ABL, à ne pas écraser avec ceux de CX : `auth.js`, `hash-password.js`, `config.js`, `models.js`, `server.js` (connexion, pas de suivi, pas de dépôt de fichiers), `index.html` (mêmes différences côté interface), `README.md`.
+Fichiers propres à ABL, à ne pas écraser avec ceux de CX : `auth.js`, `hash-password.js`, `shooting.js`, `config.js` (dont `socialParDate: true`), `models.js`, `server.js` (connexion, import de shooting, pas de suivi, pas de dépôt de fichiers), `index.html` (mêmes différences côté interface), `package.json` et `package-lock.json` (bibliothèque `yauzl` pour les zips), `README.md`.
 
 ---
 
@@ -34,12 +35,21 @@ S'il n'existe pas, l'outil propose de créer le dossier `ID - Nom`. La création
 
 L'établissement peut être corrigé en cours de session, depuis le plan de travail.
 
-### 2. Les deux façons d'importer
+### 2. Les trois façons d'importer
 
 | Mode | Ce qu'on fait | Où vont les originaux |
 |---|---|---|
-| **Un dossier Drive** | On choisit le dossier du shooting dans la liste des sous-dossiers de l'établissement (ou on colle un lien en dépannage). | Ils y sont déjà, rien n'est copié. |
-| **Des liens** | URL de posts Instagram, TikTok, Facebook, ou d'une image en ligne. Un post bloqué par la plateforme dans certains pays ne peut pas être récupéré. | `Social media`, dès l'import. Les photos sont **recadrées automatiquement** au format vitrine. |
+| **Un dossier Drive** | On choisit un dossier déjà présent dans le Drive de l'établissement (ou on colle un lien en dépannage). | Ils y sont déjà, rien n'est copié. |
+| **Un nouveau shooting** | On dépose le zip téléchargé depuis Shoootin (ou directement les photos). | `Shooting / <mois du shooting>`, par exemple `Shooting / Octobre 2026`, créés si besoin. |
+| **Des liens** | URL de posts Instagram, TikTok, Facebook, ou d'une image en ligne. Un post bloqué par la plateforme dans certains pays ne peut pas être récupéré. | `Social media / <date du jour>`, dès l'import. Les photos sont **recadrées automatiquement** au format vitrine. |
+
+Avec ces trois modes, ABL n'a plus besoin d'ouvrir le Drive pour créer des dossiers ou y ranger des photos : l'outil crée le dossier de l'établissement (si besoin), `Shooting`, `Social media` et leurs sous-dossiers.
+
+**Nouveau shooting, en détail** (code dans `shooting.js`) :
+- Le zip est décompressé par l'outil. Les sous-dossiers du zip sont aplatis ; les fichiers parasites (`__MACOSX`, `.DS_Store`, textes…) sont ignorés.
+- Le mois est lu dans la **date de prise de vue des photos** (EXIF) : un shooting du 28 octobre importé le 3 novembre va dans `Octobre 2026`. Sans date dans les photos, c'est le mois en cours.
+- Si le dossier du mois existe déjà, les photos y sont ajoutées ; une photo déjà présente (même fichier) n'est pas recopiée.
+- Le zip peut peser plusieurs Go : il est écrit sur le volume Railway, envoyé dans Drive photo par photo, et l'avancement s'affiche. La session de retouche s'ouvre ensuite automatiquement sur le dossier du mois.
 
 Les vidéos ne se retouchent pas : elles sont seulement rangées avec les originaux.
 
@@ -77,18 +87,20 @@ Le code est dans `rangement.js`, identique à l'outil CX.
 ```
 Établissements/                          ← PARENT_FOLDER_ID
 └── 37824 - Barrel Pub/                  ← dossier établissement
-    ├── Social media/                    ← originaux récupérés par lien (créé si absent)
-    │   ├── instagram_Dcy4eVxN-EE_01.jpg
-    │   ├── instagram_Dcy4eVxN-EE_02.mp4
-    │   └── Retouche - 26 octobre 2026/
-    │       ├── instagram_Dcy4eVxN-EE_01_recadrage.png   ← la photo, recadrée
-    │       └── instagram_Dcy4eVxN-EE_02.mp4             ← la vidéo
-    └── Shooting/                        ← mode « Un dossier Drive »
-        ├── photo_01.jpg
-        ├── photo_02.jpg
-        └── Retouche - 26 octobre 2026/
-            ├── photo_01_colorimetrie.jpg  ← photo retouchée : seulement sa retouche
-            └── photo_02.jpg               ← photo non retouchée : son original
+    ├── Social media/                    ← créé si absent
+    │   └── 26 octobre 2026/             ← date de l'import par lien
+    │       ├── instagram_Dcy4eVxN-EE_01.jpg
+    │       ├── instagram_Dcy4eVxN-EE_02.mp4
+    │       └── Retouche - 26 octobre 2026/
+    │           ├── instagram_Dcy4eVxN-EE_01_recadrage.png   ← la photo, recadrée
+    │           └── instagram_Dcy4eVxN-EE_02.mp4             ← la vidéo
+    └── Shooting/                        ← créé si absent
+        └── Octobre 2026/                ← mois du shooting (date des photos)
+            ├── DSC00001.JPG
+            ├── DSC00002.JPG
+            └── Retouche - 26 octobre 2026/
+                ├── DSC00001_colorimetrie.jpg  ← photo retouchée : seulement sa retouche
+                └── DSC00002.JPG               ← photo non retouchée : son original
 ```
 
 Règles :
@@ -96,7 +108,7 @@ Règles :
 - **`Retouche - <date>`** est toujours un sous-dossier **du dossier où se trouve l'original**. La date est celle de la retouche (téléchargement ou validation), à l'heure de Paris.
 - Il contient **une seule version par photo, la version finale** : sa retouche si elle en a une, son original sinon. Les vidéos y sont copiées telles quelles. Si une photo a plusieurs variantes retouchées, chaque variante y figure.
 - Une retouche est nommée `<nom de la photo>_<retouche>.<ext>`, par exemple `_recadrage`, `_colorimetrie` ou le nom du prompt. Un original garde son nom.
-- `Social media` est retrouvé sans tenir compte des majuscules ni des accents. Les anciens dossiers de la v1 (`<Nom>_social media`, `<dossier>_retouches`) ne sont plus utilisés et ne sont pas touchés.
+- `Social media` et `Shooting` sont retrouvés sans tenir compte des majuscules ni des accents. Les anciens dossiers de la v1 (`<Nom>_social media`, `<dossier>_retouches`) ne sont plus utilisés et ne sont pas touchés.
 - **Pas de doublon :** une photo identique déjà présente dans le dossier est reconnue et n'est pas recopiée. Un fichier différent qui porte le même nom est renommé `_2`, `_3`…
 - Un problème Drive ne bloque jamais un téléchargement : l'erreur s'affiche sur la photo, et la validation réessaie.
 
@@ -161,6 +173,7 @@ Copier la valeur affichée dans la variable `APP_PASSWORD_HASH` sur Railway. Cha
 | `renderPhoto.js`, `flora.js` | Exécution d'un prompt IA (en 2K), ou du recadrage. |
 | `transforms.js`, `adjust.js` | Recadrage vitrine et colorimétrie. `adjust.js` est aussi utilisé par le navigateur pour l'aperçu, ce qui garantit un résultat identique. |
 | `links.js`, `social.js` | Import par liens (`gallery-dl`, `yt-dlp`). |
+| `shooting.js` | Import d'un nouveau shooting : décompression du zip, mois d'après la date des photos, rangement dans `Shooting / <mois>`. |
 | `notion.js`, `notionPublic.js`, `styleSource.js`, `builtinStyles.js` | Liste des prompts (Notion, plus le recadrage intégré). |
 | `models.js` | Modèle IA (Nano Banana Pro uniquement). |
 | `auth.js`, `hash-password.js`, `config.js` | Connexion par identifiant et mot de passe, et configuration. |
@@ -169,5 +182,6 @@ Copier la valeur affichée dans la variable `APP_PASSWORD_HASH` sur Railway. Cha
 
 ## Historique
 
+- **v2.1 — import des shootings.** Nouveau mode « Un nouveau shooting » : dépôt du zip Shoootin, rangement automatique dans `Shooting / <mois du shooting>` d'après la date des photos, ouverture directe de la session de retouche. Les originaux récupérés par lien sont rangés dans `Social media / <date du jour>`.
 - **v2 — alignement sur l'outil CX (v21.1).** Corrections : la colorimétrie ne fait plus échouer la validation sur les JPEG et crée une vraie nouvelle image, téléchargée et livrée ; vidéos Instagram récupérées avec le son ; vidéos TikTok fonctionnelles ; noms de fichiers accentués ; plus de fichiers en double. Images IA demandées en 2K. Nouveautés : établissement obligatoire dès l'étape 1 avec recherche par nom ou ID et création du dossier si besoin ; sélecteur de sous-dossiers en mode Drive ; rangement automatique (`Social media`, `Retouche - <date>` avec uniquement les versions finales) ; recadrage automatique des photos récupérées par lien ; bouton « Télécharger le zip » ; plus de prompt dans la vue de réglage ; plus d'ajout de fichiers dans un dossier de shooting.
 - **v1 — outil ABL.** Première version, issue de l'outil CX v14 : connexion par identifiant et mot de passe, import par dossier Drive ou par liens, 5 prompts dédiés, Nano Banana Pro fixé, coût masqué, livraison dans `<dossier>_retouches` ou `<Nom>_social media`.

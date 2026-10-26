@@ -2,6 +2,8 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import multer from 'multer';
+import fsSync from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
@@ -25,6 +27,7 @@ import { createLinksService } from './links.js';
 import { diagnostic as socialDiagnostic } from './social.js';
 import { createBackends } from './assets.js';
 import { createWorkplan, MIME } from './workplan.js';
+import { createShootings } from './shooting.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -64,7 +67,7 @@ const flora = createFlora({
 const drive = createDrive({ serviceAccountJson: config.googleServiceAccountJson });
 const store = createStore({ dir: appConfig.dataDir });
 const backends = createBackends({ drive, dir: appConfig.dataDir, parentFolderId: appConfig.parentFolderId });
-const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency });
+const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency, socialParDate: appConfig.socialParDate });
 // Pas de suivi Google Sheet dans la version ABL : il est traite autrement.
 
 // Etablissement choisi au demarrage : OBLIGATOIRE pour toute nouvelle
@@ -106,6 +109,7 @@ if (!notionSource && !notionPublicSource) {
 }
 
 const links = createLinksService();
+const shootings = createShootings({ drive, workplan, dir: appConfig.dataDir });
 
 const styleSource = createStyleSource({
   builtin: builtinStyles,
@@ -257,6 +261,44 @@ app.post('/api/sessions', async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: msg(e) });
   }
+});
+
+// --- Nouveau shooting (zip Shoootin) ----------------------------------------
+// Le zip, qui peut depasser 1 Go, est ecrit directement sur le volume (jamais
+// en memoire), puis traite en tache de fond : voir shooting.js. L'interface
+// suit l'avancement par GET /api/shootings/:id.
+fsSync.mkdirSync(shootings.dossierTemp, { recursive: true });
+// multer lit le nom des fichiers en latin1 : on le relit en UTF-8.
+const nomUtf8 = (n) => {
+  const u = Buffer.from(n, 'latin1').toString('utf8');
+  return u.includes('\uFFFD') ? n : u.normalize('NFC');
+};
+const uploadShooting = multer({
+  storage: multer.diskStorage({
+    destination: shootings.dossierTemp,
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 * 1024, files: 500 },
+});
+
+app.post('/api/shootings', uploadShooting.array('files'), async (req, res) => {
+  const fichiers = (req.files || []).map((f) => ({ path: f.path, originalname: nomUtf8(f.originalname) }));
+  const { etabId, etabNom, etabFolderId } = req.body || {};
+  const etab = lireEtab(etabId, etabNom, etabFolderId);
+  if (!etab || fichiers.length === 0) {
+    for (const f of fichiers) fsSync.rm(f.path, { force: true }, () => {});
+    return res.status(400).json({ error: !etab ? ERR_ETAB : 'Dépose le zip du shooting, ou ses photos.' });
+  }
+  const etat = await shootings.demarrer({
+    fichiers, etab, user: req.user.login, resolveModel: () => resolveModel(defaultModelKey),
+  });
+  res.status(202).json({ id: etat.id });
+});
+
+app.get('/api/shootings/:id', (req, res) => {
+  const etat = shootings.etat(req.params.id);
+  if (!etat) return res.status(404).json({ error: 'Import introuvable.' });
+  res.json(etat);
 });
 
 // --- Import depuis des liens ------------------------------------------------

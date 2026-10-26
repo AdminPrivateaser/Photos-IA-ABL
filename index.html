@@ -300,6 +300,10 @@
         <span class="ico">📁</span>
         <span><b>Un dossier Drive</b><i>Shooting complet. Le résultat repart dans un sous-dossier de ce dossier.</i></span>
       </button>
+      <button class="entry" data-tab="shooting">
+        <span class="ico">📷</span>
+        <span><b>Un nouveau shooting</b><i>Le zip téléchargé depuis Shoootin. Il est rangé dans « Shooting / mois » de l'établissement.</i></span>
+      </button>
       <button class="entry" data-tab="links">
         <span class="ico">🔗</span>
         <span><b>Des liens</b><i>Instagram, TikTok, Facebook, ou une image en ligne.</i></span>
@@ -321,6 +325,16 @@
       <div id="dropzone" tabindex="0" role="button">Dépose tes fichiers ici, ou clique pour les choisir<br /><small>Images et vidéos, 300 Mo par fichier</small></div>
       <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden />
       <div class="filelist" id="fileList"></div>
+    </div>
+
+    <div class="panel" id="pShooting">
+      <div class="step">3 · Le shooting</div>
+      <div id="shootZone" tabindex="0" role="button" style="border:2px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer;margin-bottom:10px">
+        Dépose ici le zip Shoootin, ou clique pour le choisir<br /><small>Un zip, ou directement les photos</small>
+      </div>
+      <input type="file" id="shootInput" accept=".zip,application/zip,image/*,video/*" multiple hidden />
+      <div class="filelist" id="shootList"></div>
+      <div class="hint" id="shootEtat" style="display:none"></div>
     </div>
 
     <div class="panel" id="pLinks">
@@ -493,8 +507,9 @@
     showErr(cible, m);
   }
 
-  const VERSION = 'v2-abl';
+  const VERSION = 'v2.1-abl-shooting';
 
+  let shootFiles = []; // fichiers déposés pour « Un nouveau shooting »
   let tab = 'drive', droppedFiles = [], etab = null;
   let previewId = null, chosenMedia = new Set();
   let avertPrompts = '';
@@ -557,6 +572,7 @@
       $('pDrive').classList.toggle('on', tab === 'drive');
       $('pDrop').classList.toggle('on', tab === 'drop');
       $('pLinks').classList.toggle('on', tab === 'links');
+      $('pShooting').classList.toggle('on', tab === 'shooting');
       majSetup();
     }));
 
@@ -754,7 +770,9 @@
     } else if (tab === 'drive') {
       d = `${ret} du dossier choisi.`;
     } else if (tab === 'links') {
-      d = `Les photos et vidéos récupérées sont rangées dès l\u2019import dans <code>Social media</code>, et les photos sont recadrées au format vitrine automatiquement. ${ret} de <code>Social media</code>.`;
+      d = `Les photos et vidéos récupérées sont rangées dès l\u2019import dans <code>Social media / ${esc(dateLongue())}</code>, et les photos sont recadrées au format vitrine automatiquement. ${ret} de ce dossier.`;
+    } else if (tab === 'shooting') {
+      d = `Les photos du shooting sont rangées dans <code>Shooting / mois du shooting</code> (par exemple <code>Shooting / Octobre 2026</code>, d\u2019après la date des photos), créés si besoin. ${ret} de ce dossier.`;
     } else if (etab) {
       d = `Les fichiers déposés sont rangés dès l\u2019import dans <code>Contenu gérant / ${esc(dateLongue())}</code>. ${ret} de ce dossier.`;
     } else {
@@ -776,6 +794,12 @@
     } else if (!etab) {
       $('start').disabled = true;
       $('start').textContent = 'Choisis d\u2019abord l\u2019\u00e9tablissement';
+    } else if (tab === 'shooting') {
+      const n = shootFiles.length;
+      $('start').disabled = n === 0;
+      $('start').textContent = n === 0 ? 'D\u00e9pose d\u2019abord le zip du shooting'
+        : shootFiles.some((f) => /\.zip$/i.test(f.name)) ? 'Importer le shooting'
+        : `Importer ${n} fichier${n > 1 ? 's' : ''}`;
     } else {
       const lien = $('driveUrl').value.trim();
       const n = dossierCourant ? dossierCourant.images : 0;
@@ -784,6 +808,41 @@
         ? 'Charger les photos du lien coll\u00e9'
         : n ? `Charger les ${n} photo${n > 1 ? 's' : ''} de \u00ab ${dossierCourant.name} \u00bb`
         : 'Choisis le dossier du shooting';
+    }
+  }
+
+  // ---------- Nouveau shooting (zip Shoootin) ----------
+  const sz = $('shootZone');
+  const ajouterShoot = (liste) => {
+    const ok = [...liste].filter((f) => /\.zip$/i.test(f.name) || f.type.startsWith('image/') || f.type.startsWith('video/'));
+    if (ok.length < liste.length) showErr('setupErr', `${liste.length - ok.length} fichier(s) ignoré(s) : zip, photos ou vidéos uniquement.`);
+    shootFiles = [...shootFiles, ...ok];
+    const total = shootFiles.reduce((n, f) => n + f.size, 0);
+    $('shootList').innerHTML = shootFiles.slice(0, 8).map((f) =>
+      `<div>${esc(f.name)} <span>${(f.size / 1048576).toFixed(1)} Mo</span></div>`).join('')
+      + (shootFiles.length > 8 ? `<div>… et ${shootFiles.length - 8} autre(s) <span>${(total / 1048576).toFixed(0)} Mo au total</span></div>` : '');
+    majSetup();
+  };
+  sz.addEventListener('click', () => $('shootInput').click());
+  sz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('shootInput').click(); } });
+  sz.addEventListener('dragover', (e) => { e.preventDefault(); sz.style.borderColor = 'var(--inkblue)'; });
+  sz.addEventListener('dragleave', () => { sz.style.borderColor = 'var(--line)'; });
+  sz.addEventListener('drop', (e) => { e.preventDefault(); sz.style.borderColor = 'var(--line)'; ajouterShoot(e.dataTransfer.files); });
+  $('shootInput').addEventListener('change', (e) => { ajouterShoot(e.target.files); e.target.value = ''; });
+
+  // Suit le traitement côté serveur (décompression, dossiers, envoi dans
+  // Drive) et rend l'identifiant de la session de retouche ouverte.
+  async function suivreShooting(id) {
+    const box = $('shootEtat');
+    box.style.display = 'block';
+    for (;;) {
+      const e = await api('/api/shootings/' + id);
+      box.innerHTML = e.total
+        ? `${esc(e.etape)} <b>${e.done} / ${e.total}</b>${e.dossier ? ` · dossier <b>${esc(e.dossier)}</b>` : ''}`
+        : esc(e.etape);
+      if (e.status === 'error') throw new Error(e.error || 'Import du shooting impossible.');
+      if (e.status === 'done') return e.sessionId;
+      await new Promise((ok) => setTimeout(ok, 1500));
     }
   }
 
@@ -962,6 +1021,20 @@
             ? { folderId, destination: 'source', etab }
             : { driveUrl, destination: 'source', etab }),
         });
+      } else if (tab === 'shooting') {
+        if (!shootFiles.length) throw new Error('Dépose le zip du shooting.');
+        const fd = new FormData();
+        fd.append('etabId', etab.id);
+        fd.append('etabNom', etab.nom);
+        fd.append('etabFolderId', etab.folderId);
+        for (const f of shootFiles) fd.append('files', f);
+        $('start').textContent = 'Envoi du shooting…';
+        const j = await envoyerAvecProgres('/api/shootings', fd);
+        $('upbar').classList.remove('show');
+        d = { sessionId: await suivreShooting(j.id) };
+        shootFiles = [];
+        $('shootList').innerHTML = '';
+        $('shootEtat').style.display = 'none';
       } else if (tab === 'drop') {
         if (!droppedFiles.length) throw new Error('Ajoute au moins un fichier.');
         const fd = new FormData();

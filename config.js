@@ -34,6 +34,9 @@ export const appConfig = {
   // Connexion login/mot de passe, compte unique. Voir auth.js et hash-password.js.
   appLogin: process.env.APP_LOGIN,
   appPasswordHash: process.env.APP_PASSWORD_HASH,
+  // Version ABL : originaux recuperes par lien ranges dans
+  // « Social media / <date du jour> » (voir rangement.js).
+  socialParDate: true,
   sessionSecret: process.env.SESSION_SECRET,
   dataDir: process.env.DATA_DIR || '/data',
   maxRenderPerPhoto: Number(process.env.MAX_RENDER_PER_PHOTO || '6'),
