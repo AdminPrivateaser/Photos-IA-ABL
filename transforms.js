@@ -61,6 +61,20 @@ export async function appliquerReglages(buffer, adj, { sortieJpeg = false, quali
   return out.png({ compressionLevel: 9 }).toBuffer();
 }
 
+// Garantit l'en-tete JFIF (segment APP0) en tete d'un JPEG. Cette fonction
+// etait appelee mais n'existait pas : tout reglage colorimetrique sur un
+// JPEG (donc sur la plupart des originaux) echouait avec
+// "assurerJfif is not defined". Seules les sorties FLORA, en PNG, passaient.
+const APP0_JFIF = Buffer.from([
+  0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
+  0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+]);
+function assurerJfif(jpg) {
+  if (jpg.length < 4 || jpg[0] !== 0xff || jpg[1] !== 0xd8) return jpg; // pas un JPEG
+  if (jpg[2] === 0xff && jpg[3] === 0xe0) return jpg; // APP0 deja present
+  return Buffer.concat([jpg.subarray(0, 2), APP0_JFIF, jpg.subarray(2)]);
+}
+
 // Luminance perçue moyenne d'une image encodee, sur 100.
 //
 // La reduction a 200 px AVANT le decodage n'est pas une optimisation, c'est

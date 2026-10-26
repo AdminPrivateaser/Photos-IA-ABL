@@ -1,20 +1,29 @@
 // Orchestration du plan de travail.
 //
-// Principe central : RIEN n'est livre avant "Valider". Les rendus vivent chez
-// le backend (dossier _travail en mode Drive, volume en mode glisser-deposer),
-// et la validation les promeut : deplacement vers un nouveau dossier Drive, ou
-// mise a disposition en zip.
+// Une session = un etablissement + des photos/videos importees d'une seule
+// facon (dossier Drive, fichiers deposes, liens sociaux).
+//
+// Ce qui va dans le Drive, et quand (le detail est dans rangement.js) :
+//   - a l'import : les originaux des liens (« Social media ») et des
+//     fichiers deposes (« Contenu gérant / <date> ») ;
+//   - au telechargement d'une photo retouchee, et a la validation : la
+//     retouche, dans « Retouche - <date> » sous le dossier de l'original.
+// Les rendus intermediaires vivent chez le backend (_travail en mode Drive,
+// volume DATA_DIR sinon) tant qu'ils ne sont pas ranges.
 //
 // Attention : FLORA facture a la generation, pas a la validation. Un plan
 // abandonne a deja coute. "Valider" controle ce qui est livre, pas la facture.
 
 import {
   newPhoto, photoById, renderById, currentRender,
-  nomShooting, nomAutre, extLivree, aLivrer,
+  nomShooting, nomAutre, extLivree, aLivrer, newRender,
 } from './store.js';
 import { renderPhoto, pMap } from './renderPhoto.js';
 import { formatVitrine, appliquerReglages } from './transforms.js';
 import { normalize as normalizeAdjust, isNeutral, CHAMPS as CHAMPS_ADJUST } from './adjust.js';
+import sharp from 'sharp';
+import { createRangement, cleVersion } from './rangement.js';
+import { builtinStyles } from './builtinStyles.js';
 
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'm4v']);
 export const MIME = {
@@ -23,15 +32,26 @@ export const MIME = {
   m4v: 'video/x-m4v',
 };
 
-export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
+export function createWorkplan({ store, backends, flora, drive = null, concurrency = 4 }) {
+  const rangement = drive ? createRangement({ drive, store, backends, withSession }) : null;
+  // Range les originaux d'un import (liens, fichiers deposes) en tache de
+  // fond : un souci Drive ne doit pas bloquer l'ouverture du plan.
+  function archiverEnFond(session, ids) {
+    if (!rangement || session.mode === 'drive' || ids.length === 0) return;
+    rangement.archiver(session.id, ids).catch((e) => console.warn('[rangement]', msg(e)));
+  }
+
   // --- Demarrage d'une session, quel que soit le mode ----------------------
   // mode 'drive'  : { driveUrl }
   // mode 'upload' : { files } (multer, en memoire)
   // style peut valoir null : on importe alors sans aucune generation. C'est le
   // cas normal pour un import social ou pour un simple passage au format
   // vitrine, et ca evite de depenser 30 generations a l'aveugle.
-  async function startSession({ mode, driveUrl, files, style, model, etab, destination, user }) {
+  async function startSession({ mode, driveUrl, files, style, model, etab, nomEtab, destination, user }) {
     const backend = backends[mode] || backends.drive;
+    // Photos recuperees sur les reseaux : recadrage vitrine automatique
+    // (1500x750, photo entiere, bords vides), sans IA ni cout.
+    if (mode === 'links' && !style) style = { ...builtinStyles.recadrage, auto: true };
     // Destination par defaut selon l'entree : un lien Drive livre a cote de
     // ses originaux, un import sans dossier de depart livre dans
     // l'etablissement si on en connait un, sinon en zip.
@@ -40,6 +60,7 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
       mode,
       styleLabel: style ? style.label : null,
       etab,
+      nomEtab,
       destination: dest,
       user,
     });
@@ -81,10 +102,13 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
     if (!style) {
       for (const p of session.photos) p.status = 'ok';
       session.status = 'ready';
-      return store.save(session);
+      const sv = await store.save(session);
+      archiverEnFond(session, session.photos.map((p) => p.id));
+      return sv;
     }
 
     await store.save(session);
+    archiverEnFond(session, session.photos.map((p) => p.id));
 
     // Les videos ne passent pas par FLORA : elles traversent le plan.
     const cibles = session.photos.filter((p) => p.kind === 'photo').map((p) => p.id);
@@ -143,6 +167,14 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
             const parent = photoById(s, photo.inherit.photoId);
             courant = parent ? renderById(parent, photo.inherit.renderId) : null;
           }
+          // Un recadrage vitrine n'est pas une base pour l'IA : elle
+          // travaillerait sur une image reduite entouree de bords vides. On
+          // repart de l'image qui est sous le recadrage.
+          while (courant && courant.kind === 'recadrage' && style.type !== 'recadrage') {
+            const dessous = courant.from && courant.from !== 'source' ? renderById(photo, courant.from) : null;
+            courant = dessous;
+            if (!dessous) break;
+          }
           if (courant && courant.workFileId) {
             entree = await backend.readWork(s, courant.workFileId);
             fromId = courant.id;
@@ -178,6 +210,10 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
         flora,
         floraProjectId,
       });
+      // Pour les statistiques du suivi : prompt ecrit a la main, recadrage
+      // automatique des photos recuperees par lien.
+      if (style.libre) render.libre = true;
+      if (style.auto) render.auto = true;
 
       if (render.status === 'ok') {
         try {
@@ -282,17 +318,178 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
     });
   }
 
-  // Reglages colorimetriques d'une selection. Gratuit, local, applique a la
-  // validation : rien n'est regenere, et les videos sont ignorees.
+  // --- Reglages colorimetriques : creation d'une vraie nouvelle image -----
+  //
+  // Avant, les reglages etaient seulement memorises sur la photo et appliques
+  // a la validation. Le bouton "telecharger" renvoyait donc l'image SANS les
+  // reglages, en particulier sur un original jamais retouche.
+  //
+  // Maintenant, enregistrer des reglages produit un rendu de type
+  // 'reglages', cuit en pleine resolution, sans IA ni cout. Il devient
+  // l'image retenue : c'est lui qui est telecharge, depose et livre.
+  //
+  // Les reglages ne s'empilent pas : un rendu 'reglages' garde la reference
+  // de l'image dont il part (r.from) et ses valeurs (r.adjust). Les modifier
+  // repart de cette meme base, comme dans RawTherapee ou Lightroom. Remettre
+  // tout a zero revient a la base.
+
+  // Image de depart des reglages pour une photo : le rendu retenu, ou celui
+  // dont part le rendu 'reglages' retenu, ou l'original.
+  function baseReglages(p) {
+    const cur = currentRender(p);
+    if (cur && cur.kind === 'reglages') {
+      return cur.from && cur.from !== 'source' ? renderById(p, cur.from) || null : null;
+    }
+    return cur && cur.workFileId ? cur : null;
+  }
+
   async function setAdjust({ sessionId, photoIds, adjust }) {
     const propre = normalizeAdjust(adjust);
-    return withSession(sessionId, (s) => {
-      for (const id of photoIds) {
-        const p = photoById(s, id);
-        if (!p || p.status === 'deleted' || p.kind === 'video') continue;
-        p.adjust = { ...propre };
-      }
+    const session = await store.load(sessionId);
+    if (!session) throw new Error('Session introuvable.');
+    if (session.status === 'validated') throw new Error('Session deja validee.');
+    if (session.status === 'validating') throw new Error('Validation en cours.');
+
+    const cibles = photoIds.filter((id) => {
+      const p = photoById(session, id);
+      return p && p.status !== 'deleted' && p.kind !== 'video' && !p.busy;
     });
+    if (cibles.length === 0) throw new Error('Aucune photo a regler (videos et photos en cours exclues).');
+
+    // Remise a zero : aucune image a produire, on revient a la base.
+    if (isNeutral(propre)) {
+      await withSession(sessionId, (s) => {
+        for (const id of cibles) {
+          const p = photoById(s, id);
+          if (!p) continue;
+          p.adjust = { ...propre }; // efface aussi d'anciens reglages en attente
+          const cur = currentRender(p);
+          if (cur && cur.kind === 'reglages') {
+            const base = baseReglages(p);
+            p.currentRenderId = base ? base.id : null;
+          }
+        }
+      });
+      return { queued: 0 };
+    }
+
+    await withSession(sessionId, (s) => {
+      for (const id of cibles) {
+        const p = photoById(s, id);
+        if (p) p.busy = true;
+      }
+      s.status = 'running';
+    });
+
+    // En arriere-plan : une photo de shooting pleine resolution prend une
+    // a deux secondes, un lot de trente ne doit pas tenir une requete HTTP.
+    traiterReglages(sessionId, cibles, propre).catch((e) =>
+      console.error('[reglages]', msg(e)));
+    return { queued: cibles.length };
+  }
+
+  async function traiterReglages(sessionId, photoIds, adj) {
+    // Une photo a la fois : le decodage brut d'une image 6000x4000 occupe
+    // 70 Mo, plusieurs en parallele feraient tomber le conteneur.
+    for (const photoId of photoIds) {
+      const s = await store.load(sessionId);
+      const p = s && photoById(s, photoId);
+      if (!p || p.status === 'deleted') continue;
+      const backend = backends.forSession(s);
+      const base = baseReglages(p);
+
+      const render = newRender({
+        promptLabel: 'Colorimétrie',
+        promptText: null,
+        model: null,
+        from: base ? base.id : 'source',
+        kind: 'reglages',
+      });
+      render.adjust = { ...adj };
+
+      try {
+        const entree = base
+          ? await backend.readWork(s, base.workFileId)
+          : await backend.readSource(s, p);
+        const sortie = await appliquerReglages(entree, adj);
+        const m = await sharp(sortie).metadata();
+        render.ext = m.format === 'jpeg' ? 'jpg' : m.format || 'png';
+        render.largeur = m.width || null;
+        render.hauteur = m.height || null;
+        render.poids = sortie.length;
+        render.workFileId = await backend.writeWork(s, {
+          name: `${p.base}_reglages_${render.id.slice(0, 8)}.${render.ext}`,
+          mimeType: MIME[render.ext] || 'application/octet-stream',
+          buffer: sortie,
+        });
+        render.status = 'ok';
+      } catch (e) {
+        render.status = 'error';
+        render.error = 'Réglages impossibles : ' + msg(e);
+      }
+
+      await withSession(sessionId, (s2) => {
+        const q = photoById(s2, photoId);
+        if (!q) return;
+        q.busy = false;
+        if (render.status === 'ok') {
+          q.renders.push(render);
+          q.currentRenderId = render.id;
+          // Les reglages sont maintenant DANS l'image : ne pas les
+          // reappliquer a la validation.
+          q.adjust = normalizeAdjust(null);
+          q.status = 'ok';
+          q.error = null;
+          q.reglagesErreur = null;
+        } else {
+          // Echec : la photo garde son image precedente ; l'erreur est
+          // gardee sur la photo pour que l'interface l'affiche.
+          q.reglagesErreur = render.error;
+          console.warn(`[reglages] ${q.base} : ${render.error}`);
+        }
+      });
+    }
+
+    await withSession(sessionId, (s2) => {
+      if (s2.status === 'running' && !(s2.photos || []).some((p) => p.busy)) s2.status = 'ready';
+    });
+  }
+
+  // --- Fichier d'une version, tel qu'on le voit -------------------------
+  // Rendu retenu (ou original), puis anciens reglages encore en attente,
+  // puis format vitrine. Sert au telechargement, au rangement et a la
+  // validation : les trois produisent le meme fichier.
+  async function fichierRetouche(session, p) {
+    const backend = backends.forSession(session);
+    const r = currentRender(p);
+    let buffer = r && r.workFileId
+      ? await backend.readWork(session, r.workFileId)
+      : await backend.readSource(session, p);
+    let ext = extLivree(p);
+    const etiquettes = r && r.workFileId ? [r.promptLabel] : [];
+    if (p.kind === 'photo' && !isNeutral(p.adjust)) {
+      buffer = await appliquerReglages(buffer, p.adjust);
+      const m = await sharp(buffer).metadata();
+      ext = m.format === 'jpeg' ? 'jpg' : m.format || ext;
+      etiquettes.push('Colorimétrie');
+    }
+    if (p.kind === 'photo' && p.format === 'vitrine') {
+      buffer = await formatVitrine(buffer);
+      ext = 'png';
+      etiquettes.push('Recadrage');
+    }
+    return { buffer, ext, label: etiquettes.join(' '), estRetouche: etiquettes.length > 0 };
+  }
+
+  // Range la version finale d'une photo dans « Retouche - date » : sa
+  // retouche, ou son original si elle n'en a pas (voir rangement.js).
+  async function deposer({ sessionId, photoId, fichier }) {
+    if (!rangement) throw new Error('Drive non configure.');
+    const s = await store.load(sessionId);
+    const p = s && photoById(s, photoId);
+    if (!p) throw new Error('Photo introuvable.');
+    const f = p.kind === 'video' ? null : fichier || (await fichierRetouche(s, p));
+    return rangement.deposer({ sessionId, photoId, cle: cleVersion(p), fichier: f });
   }
 
   async function removePhoto({ sessionId, photoId }) {
@@ -307,10 +504,10 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
   // Répond au besoin "j'ai oublié une photo/un établissement" sans perdre la
   // session déjà créée (voir la navigation de l'écran Import).
 
-  // Ajoute des médias déjà téléchargés (liens sociaux) à une session en
-  // cours. Les nouvelles photos arrivent sans retouche ('ok', pas de style) :
-  // le prestataire les sélectionne ensuite et choisit un prompt comme pour
-  // n'importe quelle photo du plan.
+  // Ajoute des médias déjà téléchargés/glissés à une session en cours. Les
+  // nouvelles photos arrivent sans retouche ('ok', pas de style) : on les
+  // sélectionne ensuite et on choisit un prompt comme pour n'importe quelle
+  // photo du plan.
   function newPhotoFromDescriptor(f) {
     const ext = (f.sourceName.split('.').pop() || 'jpg').toLowerCase();
     const estVideo = VIDEO_EXT.has(ext) || String(f.mimeType || '').startsWith('video/');
@@ -326,7 +523,7 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
     return p;
   }
 
-  async function addMedia({ sessionId, files }) {
+  async function addMedia({ sessionId, files, provenance = null }) {
     if (!files || files.length === 0) throw new Error('Aucun média à ajouter.');
     const session = await store.load(sessionId);
     if (!session) throw new Error('Session introuvable.');
@@ -336,29 +533,49 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
       throw new Error("L'ajout de médias n'est pas disponible pour ce mode de session.");
     }
     const descripteurs = await backend.addSource(session, files);
-    return withSession(sessionId, (s) => {
-      for (const f of descripteurs) s.photos.push(newPhotoFromDescriptor(f));
+    const prov = session.mode === 'drive' ? 'drive' : provenance;
+    const nouvelles = descripteurs.map((f) => {
+      const p = newPhotoFromDescriptor(f);
+      if (prov) p.provenance = prov;
+      return p;
+    });
+    const sv = await withSession(sessionId, (s) => {
+      for (const p of nouvelles) s.photos.push(p);
       if (s.status === 'validated' || s.status === 'validating') return; // garde-fou
       s.status = 'ready';
     });
+    archiverEnFond(session, nouvelles.map((p) => p.id));
+    // Photos recuperees sur les reseaux : meme recadrage automatique qu'a
+    // l'import initial.
+    const aRecadrer = nouvelles.filter((p) => p.kind === 'photo').map((p) => p.id);
+    if ((prov || (session.mode === 'links' ? 'social' : null)) === 'social' && aRecadrer.length) {
+      await withSession(sessionId, (s) => { s.status = 'running'; });
+      runBatch(sessionId, { style: { ...builtinStyles.recadrage, auto: true }, photoIds: aRecadrer })
+        .catch((e) => console.warn('[recadrage]', msg(e)));
+    }
+    return sv;
   }
 
   // Renseigne ou corrige l'établissement d'une session existante. Utile
-  // surtout en mode 'links', où l'établissement conditionne la destination ;
-  // sans effet fonctionnel en mode 'drive' (destination toujours 'source'),
-  // mais gardé accessible pour correction/affichage.
+  // surtout quand la destination reste a definir (etab vs zip) ; sans effet
+  // sur le mode 'drive' avec destination 'source', mais gardé accessible
+  // pour correction/affichage.
   async function setEtab({ sessionId, etab }) {
     if (!etab || !etab.id || !etab.nom) throw new Error('Établissement invalide.');
     return withSession(sessionId, (s) => {
       if (s.status === 'validated') throw new Error('Session déjà validée.');
       s.etab = { id: String(etab.id).trim(), nom: String(etab.nom).trim(), folderId: etab.folderId || null };
+      // Le nom suivi (titre, Google Sheet) suit l'etablissement corrige.
+      s.nomEtab = s.etab.nom;
     });
   }
 
   // --- Validation ---------------------------------------------------------
-  // Seule porte vers la livraison. Chaque element retenu est reconstruit ici
-  // (rendu retenu, ou original si aucune retouche), le format vitrine est
-  // applique en dernier, puis le backend depose.
+  // Remplit « Retouche - date » (sous le dossier de l'original) avec la
+  // version finale de chaque photo : sa retouche, ou son original si elle
+  // n'a pas ete retouchee, plus les videos. Ce qui n'est plus final part a
+  // la corbeille. Le dossier se telecharge alors tel quel pour le
+  // back-office.
   async function validate({ sessionId }) {
     const session = await store.load(sessionId);
     if (!session) throw new Error('Session introuvable.');
@@ -366,108 +583,52 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
     if (session.status === 'running') {
       throw new Error('Traitement en cours : attends la fin avant de valider.');
     }
+    if (!rangement) throw new Error('Drive non configure.');
 
-    // Par lignee : les retouches si elles existent, l'original sinon.
-    // Voir aLivrer() dans store.js.
-    const retenues = aLivrer(session);
-    if (retenues.length === 0) throw new Error('Aucun media a valider.');
+    const photos = (session.photos || []).filter((p) => p.status !== 'deleted');
+    const retouchees = aLivrer(session); // versions finales (nom garde pour le reste du code)
+    if (retouchees.length === 0) throw new Error('Aucun media a ranger.');
 
     session.status = 'validating';
-    session.validateProgress = { done: 0, total: retenues.length };
+    session.validateProgress = { done: 0, total: retouchees.length };
     await store.save(session);
 
-    const backend = backends.forSession(session);
-    let dest;
     try {
-      dest = await backend.openDestination(session);
-      const nomEtab = session.etab ? String(session.etab.nom).trim().replace(/[/\\]/g, '-') : '';
-      let index = dest.startIndex || 1;
-      const pris = new Set(dest.existingNames || []);
+      // Filet : un original pas encore range (import ancien, erreur Drive
+      // passagere) l'est maintenant.
+      if (session.mode !== 'drive') {
+        await rangement.archiver(sessionId, photos.filter((p) => !p.archive).map((p) => p.id));
+      }
+
       let n = 0;
-
-      for (const p of retenues) {
-        // 1. Les octets a livrer : le rendu retenu, ou l'original si la photo
-        //    n'a jamais ete retouchee (import simple).
-        const r = currentRender(p);
-        let buffer =
-          r && r.workFileId
-            ? await backend.readWork(session, r.workFileId)
-            : await backend.readSource(session, p);
-
-        // 2. Reglages colorimetriques, puis format vitrine, puis
-        //    normalisation en JPEG. Cet ordre est fige : ajuster APRES le
-        //    recadrage porterait sur une image deja en boite aux lettres.
-        //
-        //    UN SEUL ENCODAGE. Si des reglages s'appliquent, ils produisent
-        //    directement le JPEG de livraison ; sinon la normalisation s'en
-        //    charge, et ne fait rien du tout si la source est deja un JPEG
-        //    conforme.
-        // AUCUNE transformation par defaut.
-        //
-        // Le fichier livre est celui de FLORA, octet pour octet, avec son
-        // format d'origine. C'est la seule version dont on ait la preuve
-        // qu'elle est acceptee : c'est exactement le fichier obtenu avec
-        // "download the original" depuis FLORA.
-        //
-        // Les deux seules exceptions sont des actions demandees explicitement
-        // par l'utilisateur, et elles imposent un reencodage :
-        //   - des reglages colorimetriques (le format d'entree est conserve) ;
-        //   - le format vitrine, qui exige la transparence, donc du PNG.
-        let ext = extLivree(p);
-        if (p.kind === 'photo') {
-          if (!isNeutral(p.adjust)) {
-            buffer = await appliquerReglages(buffer, p.adjust);
-          }
-          if (p.format === 'vitrine') {
-            buffer = await formatVitrine(buffer);
-            ext = 'png';
-          }
-        }
-
-        // 3. Le nom depend de la destination, pas de la source.
-        //    Dossier etablissement -> numerotation a la suite.
-        //    Sous-dossier de shooting ou zip -> nom source + suffixes.
-        // Le nom porte l'extension du fichier reellement livre.
-        let nom = dest.type === 'etab'
-          ? nomAutre(p, nomEtab, index++, ext)
-          : nomShooting(p, ext);
-        // pris est amorce avec les fichiers deja presents dans le dossier :
-        // une seconde validation ne doit rien ecraser.
-        const racine = nom.replace(/\.[^.]+$/, '');
-        let k = 2;
-        while (pris.has(nom)) nom = `${racine}_${k++}.${ext}`;
-        pris.add(nom);
-
-        await backend.putFinal(session, dest, {
-          name: nom,
-          mimeType: MIME[ext] || 'application/octet-stream',
-          buffer,
-        });
-
-        // Le nom final est enregistre DANS withSession, qui relit le plan sur
-        // disque. L'ecrire sur l'objet charge en debut de validation ne servait
-        // a rien : la sauvegarde finale repart d'une relecture, et la valeur
-        // etait perdue. C'est ce qui vidait le zip.
+      let dernier = null;
+      for (const p of retouchees) {
+        const s = await store.load(sessionId);
+        const q = photoById(s, p.id);
+        const f = q.kind === 'video' ? null : await fichierRetouche(s, q);
+        dernier = await rangement.deposer({ sessionId, photoId: p.id, cle: cleVersion(q), fichier: f });
         await withSession(sessionId, (s2) => {
-          const q = photoById(s2, p.id);
-          if (q) {
-            q.finalName = nom;
-            const rq = r ? renderById(q, r.id) : null;
-            if (rq) rq.finalName = nom;
-          }
-          s2.validateProgress = { done: ++n, total: retenues.length };
+          const q2 = photoById(s2, p.id);
+          if (q2) q2.finalName = dernier.name;
+          s2.validateProgress = { done: ++n, total: retouchees.length };
         });
       }
 
-      await backend.closeDestination(session, dest);
+      await rangement.nettoyer(sessionId);
+
+      // Mode Drive : les rendus intermediaires (_travail) partent a la corbeille.
+      // (relu : le dossier _travail a pu etre cree apres le debut de la validation)
+      const sFin = await store.load(sessionId);
+      await backends.forSession(sFin).closeDestination(sFin).catch(() => {});
 
       const s3 = await store.load(sessionId);
-      s3.delivery = dest.delivery;
-      s3.destinationType = dest.type;
-      s3.outputFolderName = dest.name;
-      s3.outputFolderUrl = dest.url;
-      s3.validatedCount = retenues.length;
-      s3.validateProgress = { done: retenues.length, total: retenues.length };
+      const ranges = s3.rangement || {};
+      s3.delivery = 'drive';
+      s3.destinationType = 'retouche';
+      s3.outputFolderName = dernier ? dernier.folderName : (ranges.originaux || {}).name || null;
+      s3.outputFolderUrl = dernier ? dernier.folderUrl : (ranges.originaux || {}).url || null;
+      s3.validatedCount = retouchees.length;
+      s3.validateProgress = { done: retouchees.length, total: retouchees.length };
       s3.status = 'validated';
       return store.save(s3);
     } catch (e) {
@@ -500,11 +661,19 @@ export function createWorkplan({ store, backends, flora, concurrency = 4 }) {
   return {
     startSession, runBatch, rerun, removePhoto,
     setFormat, setAdjust, validate, withSession,
-    addMedia, setEtab,
+    addMedia, setEtab, deposer, fichierRetouche,
   };
 }
 
 const msg = (e) => String((e && e.message) || e);
+
+// AAAA-MM-JJ a l'heure de Paris : une session ouverte a 0h30 est du jour.
+function dateParis(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  return new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
 
 function slug(s) {
   return (s || '')

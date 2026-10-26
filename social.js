@@ -256,6 +256,22 @@ function parseGalleryDlOutput(stdout) {
     // gallery-dl délègue certaines vidéos à yt-dlp via une URL "ytdl:…"
     // (pas téléchargeable telle quelle : à résoudre après le parse).
     if (url.startsWith("ytdl:")) {
+      // Pour Instagram, gallery-dl fabrique une fausse adresse
+      // "ytdl:<post>1.mp4" que yt-dlp ne sait pas ouvrir. Le vrai fichier
+      // MP4 (image + son) est fourni a cote, dans video_url : on le prend.
+      const direct = meta.video_url || (Array.isArray(meta._fallback) && meta._fallback[0]);
+      if (typeof direct === "string" && /^https?:/.test(direct)) {
+        media.push({
+          index: media.length,
+          type: "video",
+          url: direct,
+          thumb: meta.display_url || null,
+          ext: "mp4",
+          width: meta.width || null,
+          height: meta.height || null,
+        });
+        continue;
+      }
       media.push({
         index: media.length,
         type: "video",
@@ -312,6 +328,7 @@ function runYtDlp(targetUrl, timeoutMs = 60_000) {
       "--user-agent",
       USER_AGENT,
       ...cookieArgs(),
+      ...(process.env.YT_DLP_EXTRA_ARGS ? process.env.YT_DLP_EXTRA_ARGS.split(" ").filter(Boolean) : []),
       targetUrl.trim(),
     ];
     execFile(
@@ -322,20 +339,29 @@ function runYtDlp(targetUrl, timeoutMs = 60_000) {
         if (err && !stdout) return reject(err);
         try {
           const info = JSON.parse(stdout.trim().split("\n")[0]);
+          // Instagram sert desormais ses videos en DASH : image et son en
+          // deux flux separes, sans aucun format "video + audio" pret a
+          // l'emploi, et sans URL au premier niveau. L'ancien code exigeait
+          // l'un ou l'autre et echouait avec "pas d'URL exploitable".
+          //
+          // On ne rejette plus : la video est marquee viaYtDlp, et le
+          // telechargement repasse par yt-dlp, qui assemble image et son
+          // avec ffmpeg (voir downloadViaYtDlp). L'URL n'est gardee qu'a
+          // titre indicatif.
+          const formats = info.formats || [];
+          if (!formats.length && !info.url) {
+            return reject(new Error("yt-dlp: aucune vidéo trouvée sur ce lien"));
+          }
           const fmt =
-            (info.formats || [])
-              .filter(
-                (f) =>
-                  f.vcodec && f.vcodec !== "none" && f.acodec && f.acodec !== "none"
-              )
+            formats
+              .filter((f) => f.vcodec !== "none" && f.acodec !== "none" && f.url)
               .sort((a, b) => (b.height || 0) - (a.height || 0))[0] || null;
-          const url = (fmt && fmt.url) || info.url;
-          if (!url) return reject(new Error("yt-dlp: pas d'URL exploitable"));
           resolve({
             type: "video",
-            url,
+            url: (fmt && fmt.url) || info.url || null,
+            viaYtDlp: true,
             thumb: info.thumbnail || null,
-            ext: (fmt && fmt.ext) || "mp4",
+            ext: "mp4",
             width: (fmt && fmt.width) || info.width || null,
             height: (fmt && fmt.height) || info.height || null,
           });
@@ -418,15 +444,15 @@ async function fetchPostMedia(postUrl) {
     const media = parseGalleryDlOutput(stdout);
 
     // Résoudre les vidéos déléguées "ytdl:…" en vraies URLs CDN.
+    // Sans video_url exploitable, on telechargera via yt-dlp sur le post,
+    // en visant la bonne position du carrousel.
+    let position = 0;
     for (const m of media) {
+      position++;
       if (!m.needsYtdl) continue;
-      const inner = m.url.slice(5); // retire le préfixe "ytdl:"
-      const resolved = await runYtDlp(inner);
-      m.url = resolved.url;
-      m.ext = resolved.ext;
-      m.thumb = m.thumb || resolved.thumb;
-      m.width = m.width || resolved.width;
-      m.height = m.height || resolved.height;
+      m.url = null;
+      m.viaYtDlp = true;
+      m.playlistItem = media.length > 1 ? position : null;
       delete m.needsYtdl;
     }
     return media;
@@ -511,17 +537,26 @@ async function fetchOnce(url) {
  * Télécharge la vidéo d'un post via yt-dlp (URLs CDN TikTok/Facebook
  * inutilisables à froid : signature liée à la session). Retourne un Buffer.
  */
-function downloadViaYtDlp(postUrl, timeoutMs = 180_000) {
+function downloadViaYtDlp(postUrl, { timeoutMs = 180_000, playlistItem = null } = {}) {
   return new Promise((resolve, reject) => {
     const base = path.join(
       os.tmpdir(),
       `yt_${Date.now()}_${Math.random().toString(36).slice(2)}`
     );
     const args = [
-      "--no-playlist",
+      // Un element precis d'un carrousel, sinon la seule video du post.
+      ...(playlistItem ? ["--playlist-items", String(playlistItem)] : ["--no-playlist"]),
+      // H.264 d'abord, puis la meilleure resolution, en MP4 : le fichier se
+      // lit partout (QuickTime, Instagram, Drive). Sans cette preference,
+      // yt-dlp prend souvent du VP9, que QuickTime ne lit pas.
+      "-S",
+      "vcodec:h264,res,acodec:aac",
+      "--merge-output-format",
+      "mp4",
       "--user-agent",
       USER_AGENT,
       ...cookieArgs(),
+      ...(process.env.YT_DLP_EXTRA_ARGS ? process.env.YT_DLP_EXTRA_ARGS.split(" ").filter(Boolean) : []),
       "-o",
       `${base}.%(ext)s`,
       postUrl.trim(),

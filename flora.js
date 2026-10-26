@@ -59,6 +59,61 @@ export function createFlora({ apiKey, workspaceId, projectId }) {
     }
   }
 
+  // --- Parametres declares par le modele -------------------------------------
+  //
+  // L'API de FLORA expose, pour chaque modele, la liste des parametres qu'il
+  // accepte : nom exact, type, valeur par defaut et options autorisees. On la
+  // lit plutot que de deviner un nom de parametre, ce qui casserait les
+  // generations si on se trompait.
+  //
+  // La liste est mise en cache : elle ne change pas d'une generation a l'autre.
+  let cacheModeles = null;
+
+  async function parametresDuModele(modelId) {
+    if (!cacheModeles) {
+      try {
+        const rep = await client.models.list();
+        cacheModeles = new Map((rep.models || []).map((m) => [m.model_id, m.params || []]));
+      } catch (e) {
+        console.warn('[flora] Liste des modeles indisponible :', e.message);
+        cacheModeles = new Map();
+      }
+    }
+    return cacheModeles.get(modelId) || [];
+  }
+
+  // Resolution voulue, appliquee UNIQUEMENT si le modele declare un parametre
+  // de resolution et accepte cette valeur. Sinon on n'envoie rien : mieux vaut
+  // une generation en resolution par defaut qu'une generation refusee.
+  const RESOLUTION = (process.env.FLORA_RESOLUTION || '2K').trim();
+
+  async function paramsResolution(modelId) {
+    if (!RESOLUTION || RESOLUTION.toLowerCase() === 'auto') return {};
+    const params = await parametresDuModele(modelId);
+    const p = params.find((x) => /^(resolution|image_resolution|output_resolution)$/i.test(x.name));
+    if (!p) {
+      console.warn(`[flora] ${modelId} ne declare aucun parametre de resolution.`);
+      return {};
+    }
+    // Si le parametre propose une liste fermee, on choisit la valeur qui
+    // correspond, sans tenir compte de la casse. Sinon on envoie tel quel.
+    const options = p.options || [];
+    if (options.length) {
+      const trouve = options.find(
+        (o) => String(o.value).toLowerCase() === RESOLUTION.toLowerCase(),
+      );
+      if (!trouve) {
+        console.warn(
+          `[flora] resolution "${RESOLUTION}" non proposee par ${modelId}. ` +
+            `Valeurs possibles : ${options.map((o) => o.value).join(', ')}.`,
+        );
+        return {};
+      }
+      return { [p.name]: trouve.value };
+    }
+    return { [p.name]: RESOLUTION };
+  }
+
   async function edit(assetUrl, { prompt, model, projectId: pid }) {
     const project_id = pid || projectId;
     const gen = await client.generations.create({
@@ -67,7 +122,7 @@ export function createFlora({ apiKey, workspaceId, projectId }) {
       model,
       workspace_id: workspaceId,
       project_id,
-      params: { image_urls: [assetUrl], ...extra },
+      params: { image_urls: [assetUrl], ...(await paramsResolution(model)), ...extra },
     });
     const output = await pollRun(gen.run_id, gen.poll_url, project_id);
     return { url: output.url, cost: gen.charged_cost || 0 };
@@ -106,5 +161,5 @@ export function createFlora({ apiKey, workspaceId, projectId }) {
     return models.map((m) => ({ model_id: m.model_id, name: m.name, capabilities: m.capabilities }));
   }
 
-  return { createProject, uploadImage, edit, listModels };
+  return { createProject, uploadImage, edit, listModels, parametresDuModele };
 }

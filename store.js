@@ -44,7 +44,7 @@ export function createStore({ dir }) {
     }
   }
 
-  async function create({ mode, styleLabel, etab, destination, user }) {
+  async function create({ mode, styleLabel, etab, nomEtab, destination, user }) {
     return save({
       id: randomUUID(),
       createdAt: new Date().toISOString(),
@@ -56,6 +56,9 @@ export function createStore({ dir }) {
       // Deduit du nom de dossier Drive "{ID} - {nom}" quand c'est possible,
       // saisi a la main sinon.
       etab: etab || null, // { id, nom }
+      // Nom saisi librement au demarrage, obligatoire. Sert au suivi Notion,
+      // independamment de l'etablissement Drive qui decide de la livraison.
+      nomEtab: nomEtab || null,
       // Destination de la validation :
       //   'source' -> sous-dossier du dossier Drive de depart (shootings)
       //   'etab'   -> dossier "{nom}_social media" de l'etablissement
@@ -90,6 +93,7 @@ export function createStore({ dir }) {
           user: s.user || null,
           mode: s.mode,
           etab: s.etab || null,
+          nomEtab: s.nomEtab || null,
           folderName: s.source ? s.source.folderName : null,
           styleLabel: s.styleLabel || null,
           createdAt: s.createdAt,
@@ -104,6 +108,8 @@ export function createStore({ dir }) {
           outputFolderUrl: s.outputFolderUrl || null,
           validatedCount: s.validatedCount || 0,
           imagesPurgees: !!s.imagesPurgees,
+          // Zip des versions finales disponible (voir /api/sessions/:id/zip).
+          zip: s.delivery === 'zip' || photos.some((p) => p.rangeRetouche && p.rangeRetouche.fileId),
         });
       } catch {
         // fichier illisible : ignore ici, signale par la purge
@@ -281,6 +287,11 @@ export function lignees(session) {
 }
 
 /**
+ * Depuis la v17, la validation ne livre plus selon cette regle : elle range
+ * seulement les photos retouchees (voir validate() dans workplan.js et
+ * rangement.js). aLivrer() ne sert plus qu'au suivi (tracker.js) et aux
+ * anciennes sessions.
+ *
  * Ce qui part reellement a la livraison, lignee par lignee.
  *
  * Regle : des qu'une retouche existe dans la lignee, on ne livre QUE les

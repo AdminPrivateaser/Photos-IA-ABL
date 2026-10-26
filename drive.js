@@ -85,6 +85,16 @@ export function createDrive({ serviceAccountJson }) {
     return Buffer.from(res.data);
   }
 
+  // Lecture en flux, sans tout charger en memoire : sert au zip, qui peut
+  // contenir des videos de plusieurs centaines de Mo.
+  async function downloadStream(fileId) {
+    const res = await drive.files.get(
+      { fileId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'stream' },
+    );
+    return res.data;
+  }
+
   async function upload(name, mimeType, buffer, parentId) {
     const { data } = await drive.files.create({
       requestBody: { name, parents: [parentId] },
@@ -146,7 +156,8 @@ export function createDrive({ serviceAccountJson }) {
   // ci-dessus, ne les remplace pas. Le prefixe est volontairement figé et
   // verifie mot pour mot (insensible a la casse) plutot que rendu generique :
   // un motif du type "n'importe quoi - n'importe quoi" reprendrait le risque
-  // qu'on evite deja pour "Fevrier 2026" ci-dessous.
+  // qu'on evite deja pour "Fevrier 2026" ci-dessous. Usage plus niche que le
+  // reste (surtout pour l'outil ABL), gardé ici par cohérence.
   const PREFIXE_FIXE = 'Growth MTA';
   const FORME_PREFIXE = new RegExp(
     `^\\s*${PREFIXE_FIXE.replace(/\s+/g, '\\s+')}\\s*[-–—_]\\s*(.+?)\\s*$`,
@@ -274,9 +285,107 @@ export function createDrive({ serviceAccountJson }) {
     return { next: max + 1, names: noms };
   }
 
+  // Sous-dossiers directs d'un dossier, pour le selecteur de l'ecran Import :
+  // on choisit le dossier du shooting au lieu de coller son lien.
+  async function listSubfolders(folderId) {
+    const dossiers = [];
+    let pageToken;
+    do {
+      const { data } = await drive.files.list({
+        q: `'${esc(folderId)}' in parents and mimeType='${FOLDER}' and trashed=false`,
+        fields: 'nextPageToken, files(id,name)',
+        pageSize: 1000,
+        orderBy: 'name',
+        corpora: 'allDrives',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageToken,
+      });
+      dossiers.push(...(data.files || []));
+      pageToken = data.nextPageToken || undefined;
+    } while (pageToken);
+    return dossiers;
+  }
+
+  // Dossier etablissement deja existant pour cet ID, ou null. Sert de garde
+  // avant une creation : une faute de frappe sur le nom ne doit pas produire
+  // un second dossier pour le meme etablissement.
+  async function findEtabById(id, parentId) {
+    const idStr = String(id || '').trim();
+    if (!idStr || !parentId) return null;
+    const { data } = await drive.files.list({
+      q:
+        `'${esc(parentId)}' in parents and mimeType='${FOLDER}' ` +
+        `and trashed=false and name contains '${esc(idStr)}'`,
+      fields: 'files(id,name,webViewLink)',
+      pageSize: 100,
+      corpora: 'allDrives',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    for (const f of data.files || []) {
+      const e = parseEtab(f.name);
+      if (e && e.id === idStr) return { folderId: f.id, name: f.name, etab: e };
+    }
+    return null;
+  }
+
+  // Remplace le contenu d'un fichier existant, sans changer son id. Sert au
+  // depot automatique des telechargements : retelecharger la meme version
+  // met a jour le fichier au lieu d'en creer un doublon.
+  async function updateContent(fileId, { name, mimeType, buffer }) {
+    const { data } = await drive.files.update({
+      fileId,
+      requestBody: name ? { name } : {},
+      media: { mimeType, body: Readable.from(buffer) },
+      fields: 'id,name',
+      supportsAllDrives: true,
+    });
+    return data;
+  }
+
+  // Fichiers d'un dossier avec leur empreinte MD5, pour reconnaitre une
+  // photo deja rangee (voir rangement.js).
+  async function listFiles(folderId) {
+    const out = [];
+    let pageToken;
+    do {
+      const { data } = await drive.files.list({
+        q: `'${esc(folderId)}' in parents and mimeType != '${FOLDER}' and trashed=false`,
+        fields: 'nextPageToken, files(id,name,md5Checksum)',
+        pageSize: 1000,
+        corpora: 'allDrives',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageToken,
+      });
+      out.push(...(data.files || []));
+      pageToken = data.nextPageToken || undefined;
+    } while (pageToken);
+    return out;
+  }
+
+  // Copie d'un fichier Drive, sans le telecharger : sert a mettre dans
+  // « Retouche - <date> » les originaux non retouches et les videos.
+  async function copy(fileId, { name, parentId }) {
+    const { data } = await drive.files.copy({
+      fileId,
+      requestBody: { name, parents: [parentId] },
+      fields: 'id,name',
+      supportsAllDrives: true,
+    });
+    return data;
+  }
+
   const folderUrl = (id) => `https://drive.google.com/drive/folders/${id}`;
 
   return {
+    copy,
+    downloadStream,
+    listFiles,
+    listSubfolders,
+    findEtabById,
+    updateContent,
     folderIdFromUrl,
     getFolder,
     parseEtab,

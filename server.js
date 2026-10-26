@@ -2,7 +2,9 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import multer from 'multer';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
 
 import { config, appConfig } from './config.js';
 import { createAuth } from './auth.js';
@@ -17,6 +19,8 @@ import {
   createStore, publicSession, photoById, renderById, currentRender, aLivrer,
   nomShooting, extLivree,
 } from './store.js';
+import { appliquerReglages } from './transforms.js';
+import { isNeutral } from './adjust.js';
 import { createLinksService } from './links.js';
 import { diagnostic as socialDiagnostic } from './social.js';
 import { createBackends } from './assets.js';
@@ -29,6 +33,8 @@ const app = express();
 // les cookies Secure ne sont jamais acceptes, ce qui fait boucler la connexion.
 app.set('trust proxy', 1);
 
+// Version ABL : connexion par identifiant + mot de passe, compte unique du
+// prestataire (voir auth.js et hash-password.js).
 const auth = createAuth({
   login: appConfig.appLogin,
   passwordHash: appConfig.appPasswordHash,
@@ -58,16 +64,23 @@ const flora = createFlora({
 const drive = createDrive({ serviceAccountJson: config.googleServiceAccountJson });
 const store = createStore({ dir: appConfig.dataDir });
 const backends = createBackends({ drive, dir: appConfig.dataDir, parentFolderId: appConfig.parentFolderId });
-const workplan = createWorkplan({ store, backends, flora, concurrency: config.concurrency });
+const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency });
+// Pas de suivi Google Sheet dans la version ABL : il est traite autrement.
 
-// Multer garde les octets en memoire le temps de les faire suivre vers Drive
-// (glisser-deposer sur une session Drive deja creee, cf. /drive-media
-// ci-dessous) : on ne les ecrit jamais sur le volume, ce n'est qu'un relais.
-const uploadMedia = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 300 * 1024 * 1024, files: 30 },
-  fileFilter: (req, file, cb) => cb(null, /^(image|video)\//.test(file.mimetype)),
-});
+// Etablissement choisi au demarrage : OBLIGATOIRE pour toute nouvelle
+// session, quel que soit le mode, et toujours relie a son dossier Drive
+// "{ID} - {nom}". C'est ce qui garantit une trace rangee de tout ce qui est
+// genere. Le nom alimente aussi le suivi (Google Sheet). Renvoie null si
+// l'un des trois elements manque.
+function lireEtab(id, nom, folderId) {
+  const i = String(id || '').trim();
+  const n = String(nom || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  const f = String(folderId || '').trim();
+  return i && n && f ? { id: i, nom: n, folderId: f } : null;
+}
+const ERR_ETAB = "Choisis ou crée l'établissement avant d'importer.";
+
+// 30 Mo par fichier, 60 fichiers : le glisser-deposer garde les octets en
 
 // Source des prompts. Priorite a l'API officielle ; a defaut, lecture de la
 // base publiee sur le web (voir notionPublic.js pour les limites).
@@ -121,9 +134,25 @@ app.get('/api/models', (req, res) => {
   res.json(Object.entries(models).map(([key, m]) => ({ key, label: m.label, default: !!m.default })));
 });
 
+// Diagnostic : modeles accessibles a la cle, AVEC les parametres que chacun
+// accepte. C'est ici qu'on lit le nom exact du parametre de resolution et ses
+// valeurs autorisees, plutot que de le deviner.
 app.get('/api/flora-models', async (req, res) => {
   try {
-    res.json(await flora.listModels());
+    const rep = await flora.listModels();
+    const modeles = (rep.models || rep || []).map((m) => ({
+      model_id: m.model_id,
+      name: m.name,
+      type: m.type,
+      params: (m.params || []).map((p) => ({
+        name: p.name,
+        type: p.type,
+        required: p.required,
+        default: p.default,
+        options: (p.options || []).map((o) => o.value),
+      })),
+    }));
+    res.json({ resolutionDemandee: process.env.FLORA_RESOLUTION || '2K', modeles });
   } catch (e) {
     res.status(500).json({ error: msg(e) });
   }
@@ -146,11 +175,71 @@ app.get('/api/etabs', async (req, res) => {
   }
 });
 
+// Creation d'un dossier etablissement "{ID} - {nom}" sous PARENT_FOLDER_ID,
+// quand la recherche n'a rien trouve. Refusee si l'ID existe deja : une
+// faute de frappe sur le nom ne doit pas creer un doublon.
+app.post('/api/etabs', async (req, res) => {
+  const id = String((req.body || {}).id || '').trim();
+  const nom = String((req.body || {}).nom || '').trim().replace(/\s+/g, ' ');
+  if (!/^\d{2,}$/.test(id)) return res.status(400).json({ error: "L'ID doit être un nombre (au moins 2 chiffres)." });
+  if (!/[A-Za-z\u00C0-\u024F]/.test(nom)) return res.status(400).json({ error: "Renseigne le nom de l'établissement." });
+  if (/[\/\\]/.test(nom)) return res.status(400).json({ error: 'Le nom ne peut pas contenir de / ou de \\.' });
+  if (!appConfig.parentFolderId) {
+    return res.status(400).json({ error: 'PARENT_FOLDER_ID absente sur le serveur.' });
+  }
+  try {
+    const existe = await drive.findEtabById(id, appConfig.parentFolderId);
+    if (existe) {
+      return res.status(409).json({
+        error: `L'ID ${id} existe déjà : « ${existe.name} ». Sélectionne-le plutôt que d'en créer un nouveau.`,
+        existant: existe,
+      });
+    }
+    const dossier = await drive.createFolder(`${id} - ${nom}`, appConfig.parentFolderId);
+    console.log(`[etabs] dossier cree : ${dossier.name} par ${req.user.login}`);
+    res.json({ folderId: dossier.id, name: dossier.name, etab: { id, nom } });
+  } catch (e) {
+    res.status(500).json({ error: msg(e) });
+  }
+});
+
+// Contenu d'un dossier pour le selecteur de l'ecran Import : ses
+// sous-dossiers et le nombre de photos qu'il contient directement.
+app.get('/api/folders/:id', async (req, res) => {
+  try {
+    const [dossier, enfants, images] = await Promise.all([
+      drive.getFolder(req.params.id),
+      drive.listSubfolders(req.params.id),
+      drive.listImages(req.params.id),
+    ]);
+    res.json({
+      folder: { id: dossier.id, name: dossier.name },
+      children: enfants
+        // On part toujours des originaux : les dossiers produits par l'outil
+        // (_travail, anciens _retouches, « Retouche - <date> ») sont masques.
+        .filter((f) => !/^_(travail|retouches)$/i.test(f.name) && !/_retouches$/i.test(f.name)
+          && !/^retouche\s*-\s/i.test(f.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+        .map((f) => ({ id: f.id, name: f.name })),
+      images: images.length,
+    });
+  } catch (e) {
+    res.status(400).json({ error: 'Dossier inaccessible : ' + msg(e) });
+  }
+});
+
+
 // --- Sessions ---------------------------------------------------------------
 // styleKey est facultatif : sans lui on importe sans aucune generation.
 app.post('/api/sessions', async (req, res) => {
-  const { driveUrl, style: styleKey, model: modelKey, etab, destination } = req.body || {};
-  if (!driveUrl) return res.status(400).json({ error: 'Lien du dossier Drive manquant.' });
+  const { style: styleKey, model: modelKey, etab: e, destination, folderId } = req.body || {};
+  const etab = lireEtab(e && e.id, e && e.nom, e && e.folderId);
+  if (!etab) return res.status(400).json({ error: ERR_ETAB });
+  // Dossier choisi dans le selecteur, ou lien colle en depannage.
+  const driveUrl = folderId
+    ? drive.folderUrl(String(folderId).trim())
+    : String((req.body || {}).driveUrl || '').trim();
+  if (!driveUrl) return res.status(400).json({ error: 'Choisis le dossier Drive du shooting.' });
+  const nomEtab = etab.nom;
 
   try {
     const style = styleKey ? await styleSource.getStyle(styleKey) : null;
@@ -159,7 +248,8 @@ app.post('/api/sessions', async (req, res) => {
       driveUrl,
       style,
       model: resolveModel(modelKey || defaultModelKey),
-      etab: etab || null,
+      etab,
+      nomEtab,
       destination: destination || 'source',
       user: req.user.login,
     });
@@ -196,20 +286,13 @@ app.post('/api/links/preview', async (req, res) => {
 });
 
 app.post('/api/links/import', async (req, res) => {
-  const { previewId, ids, style: styleKey, model: modelKey, etab } = req.body || {};
+  const { previewId, ids, style: styleKey, model: modelKey, etab: e } = req.body || {};
+  const etabOk = lireEtab(e && e.id, e && e.nom, e && e.folderId);
+  if (!etabOk) return res.status(400).json({ error: ERR_ETAB });
+  const nomEtab = etabOk.nom;
   if (!previewId || !Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'Aucun media selectionne.' });
   }
-  // Établissement obligatoire : plus de repli en zip dans cette version.
-  // Voir drive.findOrCreateEtabFolder pour la création automatique du
-  // dossier "{ID} - {Nom}" quand il n'existe pas encore.
-  const etabOk = etab && etab.id && etab.nom
-    ? { id: String(etab.id).trim(), nom: String(etab.nom).trim(), folderId: etab.folderId || null }
-    : null;
-  if (!etabOk) {
-    return res.status(400).json({ error: "Établissement manquant : indique un ID et un nom." });
-  }
-
   try {
     const { fichiers, erreurs } = await links.download(previewId, ids);
     const style = styleKey ? await styleSource.getStyle(styleKey) : null;
@@ -220,6 +303,7 @@ app.post('/api/links/import', async (req, res) => {
       style,
       model: resolveModel(modelKey || defaultModelKey),
       etab: etabOk,
+      nomEtab,
       destination: 'etab',
       user: req.user.login,
     });
@@ -229,9 +313,7 @@ app.post('/api/links/import', async (req, res) => {
   }
 });
 
-// --- Ajouter des médias à une session existante (liens) --------------------
-// Complète la session en cours au lieu d'en ouvrir une nouvelle : répond au
-// cas "j'ai oublié une photo" sans perdre les retouches déjà lancées.
+// ouvrir une nouvelle, une fois d'autres médias prévisualisés.
 app.post('/api/sessions/:id/links-media', async (req, res) => {
   const { previewId, ids } = req.body || {};
   if (!previewId || !Array.isArray(ids) || ids.length === 0) {
@@ -239,42 +321,20 @@ app.post('/api/sessions/:id/links-media', async (req, res) => {
   }
   try {
     const { fichiers, erreurs } = await links.download(previewId, ids);
-    const session = await workplan.addMedia({ sessionId: req.params.id, files: fichiers });
+    const session = await workplan.addMedia({ sessionId: req.params.id, files: fichiers, provenance: 'social' });
     res.json({ sessionId: session.id, imported: fichiers.length, erreurs });
   } catch (e) {
     res.status(400).json({ error: msg(e) });
   }
 });
 
-// --- Établissement d'une session existante ---------------------------------
-// Corriger ou renseigner l'établissement après coup, sans repartir de zéro.
+// Renseigner ou corriger l'établissement d'une session déjà créée.
 app.post('/api/sessions/:id/etab', async (req, res) => {
   const { id: etabId, nom: etabNom, folderId } = req.body || {};
-  if (!etabId || !etabNom) {
-    return res.status(400).json({ error: 'ID et nom requis.' });
-  }
+  const etab = lireEtab(etabId, etabNom, folderId);
+  if (!etab) return res.status(400).json({ error: ERR_ETAB });
   try {
-    const session = await workplan.setEtab({
-      sessionId: req.params.id,
-      etab: { id: String(etabId).trim(), nom: String(etabNom).trim(), folderId: folderId || null },
-    });
-    res.json(publicSession(session));
-  } catch (e) {
-    res.status(400).json({ error: msg(e) });
-  }
-});
-
-// --- Glisser-déposer sur une session Drive déjà créée -----------------------
-// Dépose le fichier directement dans le dossier Drive de départ, puis
-// l'ajoute au plan — répond à "j'ai oublié une photo" sans repasser par
-// Drive manuellement.
-app.post('/api/sessions/:id/drive-media', uploadMedia.array('files'), async (req, res) => {
-  const files = req.files || [];
-  if (files.length === 0) {
-    return res.status(400).json({ error: 'Aucun média reçu. Images et vidéos acceptées.' });
-  }
-  try {
-    const session = await workplan.addMedia({ sessionId: req.params.id, files });
+    const session = await workplan.setEtab({ sessionId: req.params.id, etab });
     res.json(publicSession(session));
   } catch (e) {
     res.status(400).json({ error: msg(e) });
@@ -328,7 +388,8 @@ app.post('/api/sessions/:id/rerun', async (req, res) => {
     // Garde-fou cout : FLORA facture a la generation, pas a la validation.
     const trop = photoIds
       .map((id) => photoById(session, id))
-      .filter((p) => p && p.renders.length >= appConfig.maxRenderPerPhoto);
+      // Les rendus 'reglages' sont gratuits : ils ne comptent pas.
+      .filter((p) => p && p.renders.filter((r) => r.kind !== 'reglages').length >= appConfig.maxRenderPerPhoto);
     if (trop.length) {
       return res.status(429).json({
         error:
@@ -349,7 +410,7 @@ app.post('/api/sessions/:id/rerun', async (req, res) => {
     if (prompt) {
       const nom = String(promptLabel || '').trim();
       const suffixe = slug(nom) || 'libre';
-      style = { label: nom || 'Prompt libre', suffix: suffixe, prompt, type: 'ai', model: null };
+      style = { label: nom || 'Prompt libre', suffix: suffixe, prompt, type: 'ai', model: null, libre: true };
     } else {
       style = await styleSource.getStyle(styleKey);
     }
@@ -422,17 +483,19 @@ app.post('/api/sessions/:id/format', async (req, res) => {
 
 // --- Reglages colorimetriques ----------------------------------------------
 // Luminosite, contraste, saturation, temperature, de -100 a +100. Gratuit,
-// local, applique a la validation. Les formules sont dans adjust.js, importe
-// aussi par le navigateur : l'apercu et l'image livree passent par le meme
-// code, donc ils ne peuvent pas divergier.
+// sans IA. Enregistrer cree une NOUVELLE IMAGE (rendu 'reglages') en pleine
+// resolution, qui devient l'image retenue : telechargee, deposee et livree.
+// Le traitement tourne en arriere-plan ; l'interface suit par son sondage.
+// Les formules sont dans adjust.js, importe aussi par le navigateur :
+// l'apercu et l'image produite passent par le meme code.
 app.post('/api/sessions/:id/adjust', async (req, res) => {
   const { photoIds, adjust } = req.body || {};
   if (!Array.isArray(photoIds) || photoIds.length === 0) {
     return res.status(400).json({ error: 'Aucune photo selectionnee.' });
   }
   try {
-    await workplan.setAdjust({ sessionId: req.params.id, photoIds, adjust });
-    res.json({ ok: true });
+    const r = await workplan.setAdjust({ sessionId: req.params.id, photoIds, adjust });
+    res.json({ ok: true, queued: r.queued });
   } catch (e) {
     res.status(400).json({ error: msg(e) });
   }
@@ -449,14 +512,16 @@ app.post('/api/sessions/:id/validate', async (req, res) => {
       return res.status(400).json({ error: 'Traitement en cours : attends la fin avant de valider.' });
     }
 
-    // Meme regle que la validation : les retouches d'une lignee, ou son
-    // original si elle n'en a aucune.
+    // « Retouche - date » recoit la version finale de chaque photo : sa
+    // retouche, ou son original si elle n'en a pas, plus les videos.
     const aEnvoyer = aLivrer(s).length;
-    if (aEnvoyer === 0) return res.status(400).json({ error: 'Aucun media a valider.' });
+    if (aEnvoyer === 0) return res.status(400).json({ error: 'Aucun media a ranger.' });
 
     res.status(202).json({ ok: true, total: aEnvoyer });
 
-    workplan.validate({ sessionId: req.params.id }).catch((e) => console.error('[validate]', msg(e)));
+    workplan
+      .validate({ sessionId: req.params.id })
+      .catch((e) => console.error('[validate]', msg(e)));
   } catch (e) {
     if (!res.headersSent) res.status(400).json({ error: msg(e) });
   }
@@ -568,13 +633,9 @@ app.get('/api/sessions/:id/photos/:photoId/download', async (req, res) => {
     if (!p) return res.status(404).send('Photo introuvable.');
     if (p.kind === 'video') return res.status(415).send('Cette action ne concerne que les images.');
 
-    const backend = backends.forSession(s);
-    const r = currentRender(p);
-    const buffer = r && r.workFileId
-      ? await backend.readWork(s, r.workFileId)
-      : await backend.readSource(s, p);
-
-    const ext = extLivree(p);
+    // Le fichier tel qu'on le voit : rendu retenu, reglages, format.
+    const fichier = await workplan.fichierRetouche(s, p);
+    const { buffer, ext } = fichier;
     const nomFichier = nomShooting(p, ext);
     // Deux formes dans l'en-tete : une ASCII de repli, et la forme encodee
     // (RFC 5987) que les navigateurs modernes preferent, pour ne pas casser
@@ -586,10 +647,102 @@ app.get('/api/sessions/:id/photos/:photoId/download', async (req, res) => {
       `attachment; filename="${nomAscii}"; filename*=UTF-8''${encodeURIComponent(nomFichier)}`,
     );
     res.send(buffer);
+
+    // Rangement automatique APRES l'envoi : un souci Drive ne doit jamais
+    // bloquer le telechargement. La version telechargee, si c'est la version
+    // finale de la photo, part dans « Retouche - date » (sous le dossier de
+    // l'original). Le resultat, ou l'erreur, est garde sur la photo.
+    workplan
+      .deposer({ sessionId: s.id, photoId: p.id, fichier })
+      .then((f) => f && !f.inchange && console.log(`[rangement] ${f.name} -> ${f.folderName}`))
+      .catch(async (e) => {
+        console.warn('[rangement] echec :', msg(e));
+        await workplan.withSession(s.id, (s2) => {
+          const q = photoById(s2, p.id);
+          if (q) q.depotErreur = msg(e);
+        }).catch(() => {});
+      });
   } catch (e) {
-    res.status(500).send(msg(e));
+    if (!res.headersSent) res.status(500).send(msg(e));
   }
 });
+
+// --- Zip des versions finales --------------------------------------------
+// Un clic apres la validation : les fichiers que la session a ranges dans
+// « Retouche - <date> », lus dans le Drive (le zip est donc toujours
+// identique a ce qui est range), sans passer par le Drive a la main.
+// Seuls les fichiers de CETTE session : un dossier du jour partage par
+// plusieurs sessions ne melange pas leurs fichiers.
+app.get('/api/sessions/:id/zip', async (req, res) => {
+  const s = await store.load(req.params.id);
+  if (!s) return res.status(404).send('Session introuvable.');
+
+  // Sessions validees avant la v18 : ancien zip local.
+  if (s.delivery === 'zip') return zipAncien(req, res, s);
+
+  const finales = new Set(aLivrer(s).map((p) => p.id));
+  const fichiers = (s.photos || [])
+    .filter((p) => p.status !== 'deleted' && finales.has(p.id) && p.rangeRetouche && p.rangeRetouche.fileId)
+    .map((p) => ({ fileId: p.rangeRetouche.fileId, name: p.rangeRetouche.name }));
+  if (fichiers.length === 0) {
+    return res.status(404).send('Aucun fichier rangé pour cette session : valide-la d\'abord.');
+  }
+
+  const etab = s.etab && s.etab.nom ? `${s.etab.nom} - ` : '';
+  const dossier = (s.rangement && s.rangement.retouches && s.rangement.retouches.name || 'Retouche')
+    .split(' / ').pop();
+  const nomZip = `${etab}${dossier}.zip`.replace(/[/\\:*?"<>|]/g, '-');
+  const nomAscii = nomZip.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="${nomAscii}"; filename*=UTF-8''${encodeURIComponent(nomZip)}`);
+
+  // Photos et videos sont deja compressees : on les range sans recompresser,
+  // ce qui rend le zip presque immediat.
+  const archive = archiver('zip', { store: true });
+  archive.on('warning', (e) => console.warn('[zip]', e.message));
+  archive.on('error', (e) => {
+    console.error('[zip]', e.message);
+    res.destroy();
+  });
+  archive.pipe(res);
+  const pris = new Set();
+  for (const f of fichiers) {
+    let nom = f.name;
+    for (let k = 2; pris.has(nom); k++) nom = f.name.replace(/(\.[^.]+)?$/, `_${k}$1`);
+    pris.add(nom);
+    try {
+      const flux = await drive.downloadStream(f.fileId);
+      await new Promise((ok, ko) => {
+        flux.on('end', ok);
+        flux.on('error', ko);
+        archive.append(flux, { name: nom });
+      });
+    } catch (e) {
+      console.warn('[zip] fichier ignore :', nom, msg(e));
+    }
+  }
+  archive.finalize();
+});
+
+async function zipAncien(req, res, s) {
+  if (s.status !== 'validated') return res.status(400).send('Session non validee.');
+  const backend = backends.forSession(s);
+  const noms = (await backend.listFinal(s)) || [];
+  if (noms.length === 0) return res.status(404).send('Aucun fichier a telecharger.');
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', `attachment; filename="${s.outputFolderName || 'retouches'}.zip"`);
+  const archive = archiver('zip', { store: true });
+  archive.on('error', (e) => { console.error('[zip]', e.message); res.destroy(); });
+  archive.pipe(res);
+  for (const nom of noms) {
+    try {
+      archive.append(await backend.readFinal(s, nom), { name: nom });
+    } catch (e) {
+      console.warn('[zip] fichier ignore :', nom, e.message);
+    }
+  }
+  archive.finalize();
+}
 
 function slug(s) {
   return String(s || '')

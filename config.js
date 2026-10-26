@@ -26,6 +26,7 @@ export const config = {
   // Utilise uniquement si NOTION_API_KEY est absente. Passe par l'API interne
   // notion.so/api/v3, non documentee et sans version epinglee.
   notionPublicPage: env('NOTION_PUBLIC_PAGE', ''),
+
 };
 
 // --- Ajouts plan de travail ---------------------------------------------------

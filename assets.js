@@ -6,19 +6,12 @@
 //    'drive'          -> originaux dans le dossier Drive, rendus dans _travail
 //    'upload'/'links' -> tout sur le volume (DATA_DIR/sessions/<id>/)
 //
-// 2. OU va le resultat a la validation (session.destination)
-//    'source' -> sous-dossier CREE DANS le dossier Drive de depart.
-//                C'est le cas des shootings : le CSM colle un lien, le
-//                resultat reste a cote de ses originaux.
-//    'etab'   -> dossier "{nom}_social media" du dossier etablissement,
-//                retrouve par recherche sur l'ID, cree s'il n'existe pas
-//                encore ("{ID} - {Nom}"). Cas des liens sociaux, ou il n'y a
-//                aucun dossier de depart. Obligatoire dans cette version :
-//                pas de repli en zip.
-//
-// La livraison se fait en trois temps, pour que le nommage (qui doit savoir ce
-// qui existe deja dans le dossier cible) reste dans workplan.js :
-//   openDestination -> putFinal (n fois) -> closeDestination
+// 2. Depuis la v17, le rangement dans le Drive (originaux a l'import,
+//    retouches dans « Retouche - <date> ») est fait par rangement.js.
+//    openDestination / putFinal ne servent plus qu'aux anciennes sessions
+//    (livraison « _retouches », « {nom}_social media » ou zip) ; seul
+//    closeDestination est encore appele a la validation, pour mettre le
+//    dossier _travail a la corbeille en mode Drive.
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -135,6 +128,8 @@ export function createDriveBackend({ drive, parentFolderId }) {
     // depart de la session, puis le traite comme n'importe quelle photo du
     // dossier : le fichier existe reellement dans le Drive du CSM, pas
     // seulement dans la session, les deux restent donc toujours synchronises.
+    // Reponse a "j'ai oublie une photo/l'etablissement" sans perdre la
+    // session deja creee.
     async addSource(session, files) {
       if (!session.source || !session.source.folderId) {
         throw new Error('Aucun dossier Drive de départ pour cette session.');
@@ -198,9 +193,9 @@ export function createLocalBackend({ dir, drive, parentFolderId }) {
     readSource: (session, photo) => fs.readFile(p(session.id, 'source', photo.sourceRef)),
     readWork: (session, ref) => fs.readFile(p(session.id, 'work', ref)),
 
-    // Ajoute des médias à une session déjà démarrée (liens sociaux) : même
-    // écriture que prepare(), mais sur une session existante, pour compléter
-    // un import au lieu d'en ouvrir un nouveau.
+    // Ajoute des médias à une session déjà démarrée (glisser-déposer, liens
+    // sociaux) : même écriture que prepare(), mais sur une session
+    // existante, pour compléter un import au lieu d'en ouvrir un nouveau.
     async addSource(session, files) {
       const photos = [];
       for (const f of files) {
@@ -218,17 +213,26 @@ export function createLocalBackend({ dir, drive, parentFolderId }) {
       return ref;
     },
 
-    // Pas de dossier de depart : l'etablissement est obligatoire dans cette
-    // version (plus de repli en zip). server.js le verifie deja avant de
-    // creer la session ; cette erreur ne devrait donc jamais se produire en
-    // usage normal, elle protege juste contre un appel direct a l'API.
+    // Pas de dossier de depart : soit l'etablissement, soit le zip.
     async openDestination(session) {
       if (session.destination === 'etab' && session.etab) return d.ouvrirEtab(session);
-      throw new Error('Aucun établissement sélectionné pour cette session.');
+      return {
+        type: 'zip',
+        ref: 'final',
+        name: 'Retouches',
+        url: null,
+        startIndex: 1,
+        existingNames: [],
+        delivery: 'zip',
+      };
     },
 
     async putFinal(session, dest, item) {
-      return d.putFinal(session, dest, item);
+      if (dest.delivery === 'drive') return d.putFinal(session, dest, item);
+      // Zip : le fichier est ecrit sous son nom final, l'endpoint de
+      // telechargement se contente de lire ce dossier.
+      await write(session.id, 'final', item.name, item.buffer);
+      return item.name;
     },
 
     async closeDestination() {},
@@ -237,6 +241,15 @@ export function createLocalBackend({ dir, drive, parentFolderId }) {
     async cleanup(session) {
       await fs.rm(base(session.id), { recursive: true, force: true });
     },
+
+    listFinal: async (session) => {
+      try {
+        return await fs.readdir(path.join(base(session.id), 'final'));
+      } catch {
+        return [];
+      }
+    },
+    readFinal: (session, name) => fs.readFile(p(session.id, 'final', name)),
   };
 }
 

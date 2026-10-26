@@ -89,6 +89,9 @@ export async function renderPhoto({ sourceBuffer, style, model, from, flora, flo
       render.largeur = m.width || null;
       render.hauteur = m.height || null;
       render.poids = brut.length;
+      // Les dimensions dans les logs : c'est la verification la plus directe
+      // que la resolution demandee a bien ete appliquee.
+      console.log(`[flora] dimensions : ${m.width}x${m.height}`);
     } catch {
       render.ext = 'png';
       render.mimeType = 'image/png';

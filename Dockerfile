@@ -1,5 +1,9 @@
 # Joy Contenus — Node 22 + gallery-dl + yt-dlp
 #
+# yt-dlp est installe avec curl-cffi : TikTok refuse les telechargements qui
+# ne se presentent pas comme un vrai navigateur, et curl-cffi permet a
+# yt-dlp de l'imiter. Sans lui, toute video TikTok echoue.
+#
 # Ce Dockerfile est OBLIGATOIRE : gallery-dl et yt-dlp sont des programmes
 # Python, et le détecteur automatique de Railway (Railpack) ne voit qu'un
 # projet Node grâce à package.json. Il n'installerait jamais Python, et
@@ -18,7 +22,7 @@ FROM node:22-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3 python3-pip curl ffmpeg \
-    && pip3 install --no-cache-dir --break-system-packages gallery-dl yt-dlp \
+    && pip3 install --no-cache-dir --break-system-packages gallery-dl "yt-dlp[default,curl-cffi]" \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

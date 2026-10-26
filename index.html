@@ -87,6 +87,14 @@
     .results button + button { border-top: 1px solid var(--line); }
     .chosen { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 10px; background: #eaf7f1; border: 1px solid #b9e3d0; font-size: 13px; margin-bottom: 14px; }
     .chosen b { font-weight: 600; }
+    .fbcrumb { font-size: 13px; margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .fbcrumb button { border: 0; background: none; padding: 0; color: var(--inkblue); font-size: 13px; text-decoration: underline; cursor: pointer; }
+    .fbcrumb b { font-weight: 600; }
+    .fblist { border: 1px solid var(--line); border-radius: 10px; overflow: auto; max-height: 260px; margin: 0 0 8px; }
+    .fblist button { display: block; width: 100%; text-align: left; padding: 9px 13px; border: 0; background: #fff; font-size: 13px; cursor: pointer; }
+    .fblist button:hover { background: #f6f4fe; }
+    .fblist button + button { border-top: 1px solid var(--line); }
+    .fbcount { font-size: 13px; padding: 9px 13px; border-radius: 10px; background: #f6f4fe; margin: 0 0 8px; }
     .chosen button { margin-left: auto; border: 0; background: none; color: #12694a; font-size: 12px; font-weight: 600; text-decoration: underline; }
     .dest { padding: 11px 13px; border-radius: 10px; background: #f1eefb; font-size: 12.5px; color: #3a2f7a; margin-bottom: 4px; }
     .dest code { font-family: ui-monospace, monospace; font-size: 12px; }
@@ -96,7 +104,8 @@
     .meta b { color: var(--ink); font-weight: 600; }
     .destline { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
     .destline b { color: var(--ink); font-weight: 600; }
-    button.validate { padding: 11px 20px; font-size: 14px; font-weight: 600; color: #fff; background: var(--ok); border: 0; border-radius: 10px; white-space: nowrap; }
+    a.validate { display: inline-block; }
+    button.validate, a.validate { padding: 11px 20px; font-size: 14px; font-weight: 600; color: #fff; background: var(--ok); border: 0; border-radius: 10px; white-space: nowrap; }
     .valbox { display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; font-size: 13px; background: #eaf7f1; border: 1px solid #b9e3d0; color: #12694a; }
     .valbox.show { display: block; }
     .bar { display: block; height: 5px; border-radius: 999px; background: #cdeadd; margin-top: 8px; overflow: hidden; }
@@ -251,8 +260,6 @@
     .slider output { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
     .dactions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
     .dactions .grow { flex: 1; }
-    #dLibre textarea { margin: 0; resize: vertical; min-height: 56px; font-size: 13px; }
-    #dLibre input[type="text"] { margin: 0; min-width: 150px; }
     .navbtn { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 11px; font-size: 13px; font-weight: 600; color: var(--muted); }
     .navbtn:hover:not(:disabled) { border-color: var(--inkblue); color: var(--inkblue); }
 
@@ -283,7 +290,11 @@
 
     <p class="sub" style="margin:0 0 20px"><a href="#" id="lienSessions">Voir les sessions de l'équipe</a></p>
 
-    <div class="step">1 · D'où viennent les contenus</div>
+    <div class="step">1 · L'établissement</div>
+    <div id="etabPicker"></div>
+    <p class="hint">Obligatoire. Tout ce qui est téléchargé ou validé est rangé dans son dossier Drive.</p>
+
+    <div class="step">2 · D'où viennent les contenus</div>
     <div class="entries">
       <button class="entry on" data-tab="drive">
         <span class="ico">📁</span>
@@ -296,14 +307,24 @@
     </div>
 
     <div class="panel on" id="pDrive">
-      <div class="step">2 · Le dossier</div>
-      <label for="driveUrl">Lien du dossier Drive</label>
-      <input id="driveUrl" type="url" placeholder="https://drive.google.com/drive/folders/..." />
-      <p class="hint">Le compte de service doit avoir accès à ce dossier.</p>
+      <div class="step">3 · Le dossier du shooting</div>
+      <div id="folderBrowser"><p class="hint">Choisis d'abord l'établissement : ses dossiers s'afficheront ici.</p></div>
+      <details id="lienDepannage" style="margin-top:6px">
+        <summary class="hint" style="cursor:pointer;margin:0">Les photos sont rangées ailleurs ? Colle le lien du dossier</summary>
+        <input id="driveUrl" type="url" placeholder="https://drive.google.com/drive/folders/..." style="margin-top:8px" />
+        <p class="hint">Le compte de service doit avoir accès à ce dossier. Un lien collé passe avant le dossier choisi ci-dessus.</p>
+      </details>
+    </div>
+
+    <div class="panel" id="pDrop">
+      <div class="step">3 · Les fichiers</div>
+      <div id="dropzone" tabindex="0" role="button">Dépose tes fichiers ici, ou clique pour les choisir<br /><small>Images et vidéos, 300 Mo par fichier</small></div>
+      <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden />
+      <div class="filelist" id="fileList"></div>
     </div>
 
     <div class="panel" id="pLinks">
-      <div class="step">2 · Les liens</div>
+      <div class="step">3 · Les liens</div>
       <label for="linksText">Un lien par ligne</label>
       <textarea id="linksText" rows="4" placeholder="https://www.instagram.com/p/...&#10;https://www.tiktok.com/@compte/video/..."></textarea>
       <p class="hint">Le post doit être public. Les vidéos sont importées telles quelles, sans retouche possible.</p>
@@ -311,31 +332,10 @@
       <div id="previewZone"></div>
     </div>
 
-    <!-- Établissement : demandé seulement quand il n'y a pas de dossier de départ.
-         Obligatoire dans cette version (plus de repli en zip). -->
-    <div id="etabBlock" style="display:none">
-      <div class="step">3 · L'établissement de destination (obligatoire)</div>
-      <div id="etabChosen"></div>
-      <div id="etabSearchBlock">
-        <label for="etabQ">Chercher par ID ou par nom</label>
-        <input type="text" id="etabQ" placeholder="12345, ou Comptoir" autocomplete="off" />
-        <div id="etabResults"></div>
-        <p class="hint" id="etabCreerHint" style="display:none">
-          Établissement introuvable : renseigne son ID et son nom ci-dessous, le dossier
-          <code>ID - Nom</code> sera créé automatiquement dans Drive.
-        </p>
-        <div id="etabCreerBlock" style="display:none">
-          <label for="etabCreerId">ID de l'établissement</label>
-          <input type="text" id="etabCreerId" placeholder="78687" autocomplete="off" />
-          <label for="etabCreerNom">Nom de l'établissement</label>
-          <input type="text" id="etabCreerNom" placeholder="Le café du coin" autocomplete="off" />
-          <button class="ghost wide" id="etabCreerValider" type="button">Utiliser cet établissement</button>
-        </div>
-      </div>
-    </div>
-
     <div class="dest" id="destPreview"></div>
     <button class="go" id="start">Charger les photos</button>
+    <button class="mini" id="annuler" style="display:none;width:100%;margin-top:8px;padding:10px">Annuler et revenir en arrière</button>
+    <div class="upbar" id="upbar"><i></i></div>
     <div class="errbox" id="setupErr"></div>
   </div>
 </div>
@@ -361,7 +361,7 @@
   <p class="sub" style="margin:0 0 14px"><a href="#" id="lienRetour">← Sessions de l'équipe</a></p>
   <div class="planhead">
     <h2 id="planTitle">Plan de travail</h2>
-    <button class="validate" id="validate">Valider et envoyer</button>
+    <button class="validate" id="validate">Valider et ranger dans Retouche</button>
   </div>
   <div class="meta" id="planMeta"></div>
   <p class="destline" id="destLine"></p>
@@ -382,6 +382,8 @@
         <label for="rStyle">Appliquer</label>
         <select id="rStyle" style="min-width:220px"></select>
       </div>
+      <!-- Version ABL : modèle unique (Nano Banana Pro), pas de sélecteur. -->
+      <select id="rModel" hidden></select>
       <button class="act" id="btnRun">Lancer</button>
     </div>
     <details id="reglagesAvances" style="margin-top:8px">
@@ -448,28 +450,6 @@
         <span class="grow"></span>
         <button class="mini" id="dDel">Retirer du plan</button>
       </div>
-      <div class="dactions" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-        <select id="dStyle" style="margin:0;min-width:180px"></select>
-        <select id="dFrom" style="margin:0;min-width:150px">
-          <option value="current">l'image actuelle</option>
-          <option value="source">la photo d'origine</option>
-        </select>
-        <select id="dMode" style="margin:0;min-width:180px">
-          <option value="duplicate">ajouter une variante</option>
-          <option value="replace">remplacer l'image actuelle</option>
-        </select>
-        <button class="act" id="dRun" style="padding:8px 16px;font-size:13px">Lancer sur cette photo</button>
-      </div>
-      <div class="dactions" id="dLibre" style="display:none;margin-top:10px">
-        <div class="field wide">
-          <label for="dPrompt">Ton prompt</label>
-          <textarea id="dPrompt" rows="2" placeholder="Décris la retouche voulue, en anglais de préférence."></textarea>
-        </div>
-        <div class="field">
-          <label for="dLabel">Nom court</label>
-          <input type="text" id="dLabel" placeholder="sans-dressage" maxlength="30" />
-        </div>
-      </div>
     </div>
   </div>
 
@@ -513,13 +493,9 @@
     showErr(cible, m);
   }
 
-  const VERSION = 'v1-outil-abl';
-  // Un seul modèle dans cette version : plus de sélecteur, la clé est fixe
-  // (voir models.js côté serveur — doit rester synchronisée avec la clé par
-  // défaut qui y est déclarée).
-  const FIXED_MODEL = 'nano-pro';
+  const VERSION = 'v2-abl';
 
-  let tab = 'drive', etab = null;
+  let tab = 'drive', droppedFiles = [], etab = null;
   let previewId = null, chosenMedia = new Set();
   let avertPrompts = '';
   let sessionId = null, session = null, poll = null;
@@ -527,10 +503,11 @@
   let filtre = 'toutes', detailId = null;
   let cmpMode = 'gliss', cmpPos = 50, cmpFlip = false;
   const reglagesLocaux = new Map();
+  const erreursMontrees = new Set();
   const imgCache = new Map();
 
   const LIBELLES = { brightness: 'Luminosité', contrast: 'Contraste', saturation: 'Saturation', temperature: 'Température' };
-  const ETATS = { running: 'en cours', ready: 'à finaliser', validating: 'envoi…', validated: 'envoyé', failed: 'échec' };
+  const ETATS = { running: 'en cours', ready: 'à finaliser', validating: 'rangement…', validated: 'rangé', failed: 'échec' };
 
   // ---------- Catalogues et identité ----------
   let nbPrompts = 0;
@@ -545,7 +522,8 @@
       avertPrompts = d.notionError || '';
       if (d.notionError) erreurVisible(d.notionError);
 
-      if ($('dStyle')) $('dStyle').innerHTML = $('rStyle').innerHTML;
+      const m = await api('/api/models');
+      $('rModel').innerHTML = m.map((x) => `<option value="${x.key}" ${x.default ? 'selected' : ''}>${esc(x.label)}</option>`).join('');
     } catch (e) {
       nbPrompts = 0;
       erreurVisible('Catalogue de prompts indisponible : ' + e.message + ' — recharge la page.');
@@ -577,40 +555,270 @@
       tab = b.dataset.tab;
       document.querySelectorAll('.entry').forEach((x) => x.classList.toggle('on', x === b));
       $('pDrive').classList.toggle('on', tab === 'drive');
+      $('pDrop').classList.toggle('on', tab === 'drop');
       $('pLinks').classList.toggle('on', tab === 'links');
       majSetup();
     }));
 
+  // ---------- Choix de l'établissement (obligatoire) ----------
+  // Recherche par ID ou par nom dans le grand dossier des établissements ;
+  // si rien ne correspond, création d'un dossier « ID - Nom ». Le même
+  // composant sert sur l'écran Import et pour corriger l'établissement
+  // d'une session en cours.
+  function monterChoixEtab(box, { initial = null, onChange }) {
+    let choisi = initial;
+    let tQ = null;
+
+    function dessiner() {
+      if (choisi) {
+        box.innerHTML = `<div class="chosen">✓ <b>${esc(choisi.id)} - ${esc(choisi.nom)}</b><button type="button" data-k="changer">changer</button></div>`;
+        box.querySelector('[data-k="changer"]').addEventListener('click', () => {
+          choisi = null;
+          dessiner();
+          onChange(null);
+          box.querySelector('[data-k="q"]').focus();
+        });
+        return;
+      }
+      box.innerHTML = `
+        <label>Chercher par ID ou par nom</label>
+        <input type="text" data-k="q" placeholder="12345, ou Comptoir" autocomplete="off" />
+        <div data-k="res"></div>
+        <div data-k="crea" style="display:none;margin:0 0 14px;padding:12px;border:1px solid var(--line);border-radius:10px">
+          <p class="hint" style="margin:0 0 8px">Établissement absent du Drive ? Crée son dossier :</p>
+          <div style="display:flex;gap:8px">
+            <div style="flex:0 0 120px"><label>ID</label><input type="text" data-k="cid" inputmode="numeric" placeholder="12345" /></div>
+            <div style="flex:1"><label>Nom</label><input type="text" data-k="cnom" maxlength="100" placeholder="Le Comptoir" /></div>
+          </div>
+          <button class="ghost wide" type="button" data-k="cgo" disabled>Créer le dossier</button>
+        </div>
+        <p class="hint" data-k="err" style="color:var(--err);display:none"></p>`;
+
+      const q = box.querySelector('[data-k="q"]');
+      const res = box.querySelector('[data-k="res"]');
+      const crea = box.querySelector('[data-k="crea"]');
+      const cid = box.querySelector('[data-k="cid"]');
+      const cnom = box.querySelector('[data-k="cnom"]');
+      const cgo = box.querySelector('[data-k="cgo"]');
+      const err = box.querySelector('[data-k="err"]');
+      const erreur = (m) => { err.textContent = m || ''; err.style.display = m ? 'block' : 'none'; };
+
+      const majCrea = () => {
+        const id = cid.value.trim(), nom = cnom.value.trim();
+        cgo.disabled = !/^\d{2,}$/.test(id) || !nom;
+        cgo.textContent = id && nom ? `Créer le dossier « ${id} - ${nom} »` : 'Créer le dossier';
+      };
+      cid.addEventListener('input', majCrea);
+      cnom.addEventListener('input', majCrea);
+
+      const ouvrirCrea = (texte) => {
+        crea.style.display = 'block';
+        if (/^\d+$/.test(texte)) { if (!cid.value) cid.value = texte; }
+        else if (texte && !cnom.value) cnom.value = texte;
+        majCrea();
+      };
+
+      q.addEventListener('input', () => {
+        clearTimeout(tQ);
+        erreur('');
+        const texte = q.value.trim();
+        if (texte.length < 2) { res.innerHTML = ''; crea.style.display = 'none'; return; }
+        tQ = setTimeout(async () => {
+          try {
+            const d = await api('/api/etabs?q=' + encodeURIComponent(texte));
+            if (q.value.trim() !== texte) return; // une frappe plus récente est partie
+            const r = d.results || [];
+            res.innerHTML = `<div class="results">${r.map((x) =>
+                `<button type="button" data-id="${esc(x.etab.id)}" data-nom="${esc(x.etab.nom)}" data-folder="${esc(x.folderId)}">${esc(x.name)}</button>`).join('')}
+              <button type="button" data-k="nouveau" style="color:var(--inkblue);font-weight:600">+ Créer un nouvel établissement</button></div>`;
+            res.querySelectorAll('[data-folder]').forEach((b) => b.addEventListener('click', () =>
+              choisir({ id: b.dataset.id, nom: b.dataset.nom, folderId: b.dataset.folder })));
+            res.querySelector('[data-k="nouveau"]').addEventListener('click', () => ouvrirCrea(texte));
+            if (r.length === 0) ouvrirCrea(texte);
+          } catch (e) { erreur(e.message); }
+        }, 300);
+      });
+
+      cgo.addEventListener('click', async () => {
+        erreur('');
+        cgo.disabled = true;
+        const libelle = cgo.textContent;
+        cgo.textContent = 'Création…';
+        try {
+          const r = await fetch('/api/etabs', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: cid.value.trim(), nom: cnom.value.trim() }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 409 && d.existant) {
+            erreur(d.error);
+            res.innerHTML = `<div class="results"><button type="button" data-k="exist">Utiliser « ${esc(d.existant.name)} »</button></div>`;
+            res.querySelector('[data-k="exist"]').addEventListener('click', () =>
+              choisir({ ...d.existant.etab, folderId: d.existant.folderId }));
+            return;
+          }
+          if (!r.ok) throw new Error(d.error || 'Erreur ' + r.status);
+          choisir({ ...d.etab, folderId: d.folderId });
+        } catch (e) {
+          erreur(e.message);
+        } finally {
+          cgo.textContent = libelle;
+          majCrea();
+        }
+      });
+    }
+
+    function choisir(e) {
+      choisi = e;
+      dessiner();
+      onChange(e);
+    }
+
+    dessiner();
+    return {
+      set(e) { choisi = e && e.id && e.nom ? { ...e } : null; dessiner(); onChange(choisi); },
+      get: () => choisi,
+    };
+  }
+
+  const choixEtabSetup = monterChoixEtab($('etabPicker'), {
+    onChange: (e) => {
+      etab = e;
+      if (e) $('setupErr').classList.remove('show');
+      if (e && e.folderId) ouvrirDossier(e.folderId, true);
+      else { navPile = []; dossierCourant = null; renderNavigateur(); }
+      majSetup();
+    },
+  });
+
+  // ---------- Navigateur de dossiers Drive (mode « Un dossier Drive ») ----------
+  // Part du dossier de l'établissement : on descend dans ses sous-dossiers
+  // jusqu'au shooting, au lieu de copier-coller un lien.
+  let navPile = [];        // [{ id, name }] du dossier établissement au dossier courant
+  let dossierCourant = null; // { id, name, images, children }
+  let navJeton = 0;
+
+  async function ouvrirDossier(id, racine = false) {
+    const jeton = ++navJeton;
+    if (racine) navPile = [];
+    $('folderBrowser').innerHTML = '<p class="hint">Lecture du dossier…</p>';
+    try {
+      const d = await api('/api/folders/' + encodeURIComponent(id));
+      if (jeton !== navJeton) return; // un autre dossier a été ouvert entre-temps
+      const i = navPile.findIndex((x) => x.id === d.folder.id);
+      if (i >= 0) navPile = navPile.slice(0, i + 1);
+      else navPile.push({ id: d.folder.id, name: d.folder.name });
+      dossierCourant = { id: d.folder.id, name: d.folder.name, images: d.images, children: d.children };
+    } catch (e) {
+      if (jeton !== navJeton) return;
+      dossierCourant = null;
+      $('folderBrowser').innerHTML = `<p class="hint" style="color:var(--err)">${esc(e.message)}</p>`;
+      majSetup();
+      return;
+    }
+    renderNavigateur();
+    majSetup();
+  }
+
+  function renderNavigateur() {
+    const box = $('folderBrowser');
+    if (!etab) {
+      box.innerHTML = '<p class="hint">Choisis d\u2019abord l\u2019établissement : ses dossiers s\u2019afficheront ici.</p>';
+      return;
+    }
+    if (!dossierCourant) return;
+    const fil = navPile.map((x, i) => i === navPile.length - 1
+      ? `<b>📁 ${esc(x.name)}</b>`
+      : `<button type="button" data-nav="${esc(x.id)}">${esc(x.name)}</button> ›`).join(' ');
+    const n = dossierCourant.images;
+    const enfants = dossierCourant.children || [];
+    box.innerHTML = `
+      <div class="fbcrumb">${fil}</div>
+      <div class="fbcount">${n
+        ? `<b>${n}</b> photo${n > 1 ? 's' : ''} dans ce dossier.`
+        : 'Aucune photo directement dans ce dossier' + (enfants.length ? ' : ouvre un sous-dossier.' : '.')}</div>
+      ${enfants.length ? `<div class="fblist">${enfants.map((f) =>
+        `<button type="button" data-nav="${esc(f.id)}">📁 ${esc(f.name)}</button>`).join('')}</div>` : ''}`;
+    box.querySelectorAll('[data-nav]').forEach((b) =>
+      b.addEventListener('click', () => ouvrirDossier(b.dataset.nav)));
+  }
+
+  $('driveUrl').addEventListener('input', majSetup);
+
   // La destination est annoncée avant l'import, pas découverte après.
   function majSetup() {
-    const besoinEtab = tab === 'links';
-    $('etabBlock').style.display = besoinEtab ? 'block' : 'none';
-
     let d;
-    if (tab === 'drive') {
-      d = 'Les contenus validés iront dans un sous-dossier <code>_retouches</code> créé dans le dossier Drive que tu indiques, à côté des originaux.';
+    const ret = 'La version finale de chaque photo (sa retouche, ou l\u2019original si elle n\u2019est pas retouchée) ira dans un sous-dossier <code>Retouche - date</code>, au téléchargement ou à la validation';
+    if (!etab) {
+      d = 'Choisis l\u2019établissement pour voir où les contenus seront rangés.';
+    } else if (tab === 'drive') {
+      d = `${ret} du dossier choisi.`;
+    } else if (tab === 'links') {
+      d = `Les photos et vidéos récupérées sont rangées dès l\u2019import dans <code>Social media</code>, et les photos sont recadrées au format vitrine automatiquement. ${ret} de <code>Social media</code>.`;
     } else if (etab) {
-      d = `Les contenus validés iront dans <code>${esc(etab.nom)}_social media</code>, dans le dossier de l'établissement <b>${esc(etab.id)} - ${esc(etab.nom)}</b>.`;
+      d = `Les fichiers déposés sont rangés dès l\u2019import dans <code>Contenu gérant / ${esc(dateLongue())}</code>. ${ret} de ce dossier.`;
     } else {
-      d = "Choisis ou crée un établissement pour pouvoir lancer l'import.";
+      d = 'Choisis l\u2019établissement pour voir où les contenus seront rangés.';
     }
     $('destPreview').innerHTML = d;
 
-    $('start').style.display = 'block';
+    // Le glisser-déposer n'a pas de bouton : le dépôt lance le chargement.
+    $('start').style.display = tab === 'drop' ? 'none' : 'block';
     if (tab === 'links') {
       const n = chosenMedia.size;
-      $('start').disabled = !previewId || n === 0 || !etab;
+      $('start').disabled = !previewId || n === 0 || (!ajoutPourSession && !etab);
       $('start').textContent = !previewId
         ? 'Cherche d\u2019abord les m\u00e9dias'
         : n === 0 ? 'Aucun m\u00e9dia s\u00e9lectionn\u00e9'
-        : !etab ? 'Choisis un établissement'
         : ajoutPourSession
           ? `Ajouter ${n} m\u00e9dia${n > 1 ? 's' : ''} \u00e0 la session`
           : `Charger ${n} m\u00e9dia${n > 1 ? 's' : ''}`;
+    } else if (!etab) {
+      $('start').disabled = true;
+      $('start').textContent = 'Choisis d\u2019abord l\u2019\u00e9tablissement';
     } else {
-      $('start').disabled = false;
-      $('start').textContent = 'Charger les photos';
+      const lien = $('driveUrl').value.trim();
+      const n = dossierCourant ? dossierCourant.images : 0;
+      $('start').disabled = !lien && !n;
+      $('start').textContent = lien
+        ? 'Charger les photos du lien coll\u00e9'
+        : n ? `Charger les ${n} photo${n > 1 ? 's' : ''} de \u00ab ${dossierCourant.name} \u00bb`
+        : 'Choisis le dossier du shooting';
     }
+  }
+
+  // Glisser-déposer
+  const dz = $('dropzone');
+  dz.addEventListener('click', () => $('fileInput').click());
+  dz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileInput').click(); } });
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('hover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('hover'));
+  dz.addEventListener('drop', (e) => { e.preventDefault(); dz.classList.remove('hover'); addFiles([...e.dataTransfer.files]); });
+  $('fileInput').addEventListener('change', (e) => addFiles([...e.target.files]));
+
+  // Le dépôt lance le chargement immédiatement : pas de bouton à trouver, les
+  // photos apparaissent, et le choix du prompt se fait ensuite sur le plan de
+  // travail, une fois qu'on les voit.
+  function addFiles(list) {
+    // Le dépôt lance l'import tout de suite : sans nom, on refuse le dépôt
+    // plutôt que de perdre les fichiers sur une erreur serveur.
+    if (!etab) {
+      $('fileInput').value = '';
+      showErr('setupErr', "Choisis d'abord l'établissement, puis dépose tes fichiers.");
+      const q = document.querySelector('#etabPicker [data-k="q"]');
+      if (q) q.focus();
+      return;
+    }
+    const ok = list.filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    const rejetes = list.length - ok.length;
+    if (rejetes) showErr('setupErr', `${rejetes} fichier(s) ignoré(s) : images et vidéos uniquement.`);
+    else $('setupErr').classList.remove('show');
+    if (ok.length === 0) return;
+
+    droppedFiles = [...droppedFiles, ...ok].slice(0, 60);
+    $('fileList').innerHTML = droppedFiles.map((f) =>
+      `<div>${esc(f.name)} <span>${f.type.startsWith('video/') ? 'vidéo · ' : ''}${(f.size / 1048576).toFixed(1)} Mo</span></div>`).join('');
+    lancer();
   }
 
   // Aperçu des liens : liste les médias sans les télécharger. Un post peut en
@@ -681,62 +889,31 @@
       }));
   }
 
-  // Recherche d'établissement
-  let tQ = null;
-  $('etabQ').addEventListener('input', () => {
-    clearTimeout(tQ);
-    const q = $('etabQ').value.trim();
-    $('etabCreerHint').style.display = 'none';
-    $('etabCreerBlock').style.display = 'none';
-    if (q.length < 2) { $('etabResults').innerHTML = ''; return; }
-    tQ = setTimeout(async () => {
-      try {
-        const d = await api('/api/etabs?q=' + encodeURIComponent(q));
-        const r = d.results || [];
-        if (r.length) {
-          $('etabResults').innerHTML = `<div class="results">${r.map((x) =>
-            `<button data-id="${esc(x.etab.id)}" data-nom="${esc(x.etab.nom)}" data-folder="${esc(x.folderId)}">${esc(x.name)}</button>`).join('')}</div>`;
-          document.querySelectorAll('#etabResults button').forEach((b) =>
-            b.addEventListener('click', () => choisirEtab({ id: b.dataset.id, nom: b.dataset.nom, folderId: b.dataset.folder })));
-        } else {
-          // Aucun dossier existant : la plupart des établissements n'ont pas
-          // encore de Drive. On propose de le créer, avec ID + Nom saisis à
-          // la main (le dossier "ID - Nom" est créé automatiquement à la
-          // validation, voir drive.findOrCreateEtabFolder).
-          $('etabResults').innerHTML = '';
-          $('etabCreerHint').style.display = 'block';
-          $('etabCreerBlock').style.display = 'block';
-          // Pré-remplissage pratique : un nombre va probablement dans l'ID,
-          // du texte dans le nom.
-          if (/^\d+$/.test(q)) $('etabCreerId').value = q;
-          else $('etabCreerNom').value = q;
-        }
-      } catch (e) { showErr('setupErr', e.message); }
-    }, 300);
-  });
+  // Envoi multipart avec progression : un lot de vidéos peut peser plusieurs
+  // centaines de Mo, une attente muette serait indistinguable d'un blocage.
+  // Envoi en cours, pour pouvoir l'interrompre.
+  let envoiEnCours = null;
 
-  $('etabCreerValider').addEventListener('click', () => {
-    const id = $('etabCreerId').value.trim();
-    const nom = $('etabCreerNom').value.trim();
-    if (!id || !nom) return showErr('setupErr', "Renseigne l'ID et le nom de l'établissement.");
-    choisirEtab({ id, nom, folderId: null });
-  });
-
-  function choisirEtab(e) {
-    etab = e;
-    $('etabSearchBlock').style.display = 'none';
-    $('etabChosen').innerHTML = `<div class="chosen">✓ <b>${esc(e.id)} - ${esc(e.nom)}</b><button id="etabUndo">changer</button></div>`;
-    $('etabUndo').addEventListener('click', () => {
-      etab = null;
-      $('etabChosen').innerHTML = '';
-      $('etabSearchBlock').style.display = 'block';
-      $('etabQ').value = ''; $('etabResults').innerHTML = '';
-      $('etabCreerHint').style.display = 'none';
-      $('etabCreerBlock').style.display = 'none';
-      $('etabCreerId').value = ''; $('etabCreerNom').value = '';
-      majSetup();
+  function envoyerAvecProgres(url, formData) {
+    return new Promise((ok, ko) => {
+      const xhr = new XMLHttpRequest();
+      envoiEnCours = xhr;
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        $('upbar').classList.add('show');
+        $('upbar').querySelector('i').style.width = Math.round((e.loaded / e.total) * 100) + '%';
+      };
+      xhr.onload = () => {
+        let d = {};
+        try { d = JSON.parse(xhr.responseText); } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) ok(d);
+        else ko(new Error(d.error || 'Erreur ' + xhr.status));
+      };
+      xhr.onerror = () => ko(new Error('Envoi interrompu.'));
+      xhr.onabort = () => ko(new Error('Chargement annulé.'));
+      xhr.send(formData);
     });
-    majSetup();
   }
 
   $('start').addEventListener('click', lancer);
@@ -751,12 +928,19 @@
     $('start').disabled = true;
     const libelle = $('start').textContent;
     $('start').textContent = 'Chargement…';
+    $('dropzone').textContent = 'Chargement…';
+    $('annuler').style.display = 'block';
     try {
+      // Aucun prompt à l'import : on charge, on regarde, on décide ensuite.
+      const styleKey = undefined;
+      if (!ajoutPourSession && !etab) {
+        throw new Error("Choisis ou crée l'établissement.");
+      }
       let d;
       if (ajoutPourSession) {
         if (!previewId) throw new Error("Clique d'abord sur « Chercher les médias ».");
         if (chosenMedia.size === 0) throw new Error('Sélectionne au moins un média.');
-        if (etab) {
+        if (etab && etab.folderId) {
           await api(`/api/sessions/${ajoutPourSession}/etab`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(etab),
@@ -770,15 +954,25 @@
         ajoutPourSession = null;
       } else if (tab === 'drive') {
         const driveUrl = $('driveUrl').value.trim();
-        if (!driveUrl) throw new Error('Colle le lien du dossier Drive.');
+        const folderId = !driveUrl && dossierCourant && dossierCourant.images ? dossierCourant.id : null;
+        if (!driveUrl && !folderId) throw new Error('Choisis le dossier du shooting.');
         d = await api('/api/sessions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ driveUrl, destination: 'source' }),
+          body: JSON.stringify(folderId
+            ? { folderId, destination: 'source', etab }
+            : { driveUrl, destination: 'source', etab }),
         });
+      } else if (tab === 'drop') {
+        if (!droppedFiles.length) throw new Error('Ajoute au moins un fichier.');
+        const fd = new FormData();
+        for (const f of droppedFiles) fd.append('files', f);
+        fd.append('etabId', etab.id);
+        fd.append('etabNom', etab.nom);
+        fd.append('etabFolderId', etab.folderId);
+        d = await envoyerAvecProgres('/api/uploads', fd);
       } else {
         if (!previewId) throw new Error("Clique d'abord sur « Chercher les médias ».");
         if (chosenMedia.size === 0) throw new Error('Sélectionne au moins un média.');
-        if (!etab) throw new Error("Choisis ou crée un établissement.");
         d = await api('/api/links/import', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -798,13 +992,39 @@
       showErr('setupErr', e.message);
       $('start').disabled = false;
       $('start').textContent = libelle;
+      $('dropzone').innerHTML = 'Dépose tes fichiers ici, ou clique pour les choisir<br /><small>Images et vidéos, 300 Mo par fichier</small>';
+    } finally {
+      $('upbar').classList.remove('show');
+      $('annuler').style.display = 'none';
+      envoiEnCours = null;
     }
   }
+
+  // Revenir en arriere : interrompt l'envoi en cours et remet l'ecran d'entree
+  // dans son etat initial. Il n'y avait aucun moyen de faire marche arriere
+  // une fois le chargement lance.
+  $('annuler').addEventListener('click', () => {
+    if (envoiEnCours) { try { envoiEnCours.abort(); } catch {} }
+    droppedFiles = [];
+    previewId = null;
+    chosenMedia = new Set();
+    $('fileList').innerHTML = '';
+    $('previewZone').innerHTML = '';
+    $('driveUrl').value = '';
+    $('linksText').value = '';
+    $('upbar').classList.remove('show');
+    $('upbar').querySelector('i').style.width = '0';
+    $('annuler').style.display = 'none';
+    $('setupErr').classList.remove('show');
+    $('dropzone').innerHTML = 'Dépose tes fichiers ici, ou clique pour les choisir<br /><small>Images et vidéos, 300 Mo par fichier</small>';
+    $('start').disabled = false;
+    majSetup();
+  });
 
   // ---------- Écran 2 ----------
 
   $('lienSessions').addEventListener('click', (e) => { e.preventDefault(); ouvrirListe(); });
-  $('btnNouvelle').addEventListener('click', () => { ajoutPourSession = null; $('setupTitle').textContent = 'Importer des contenus'; montrer('setup'); });
+  $('btnNouvelle').addEventListener('click', () => { ajoutPourSession = null; $('driveUrl').value = ''; choixEtabSetup.set(null); $('setupTitle').textContent = 'Importer des contenus'; montrer('setup'); majSetup(); });
 
   let sessionsChargees = [];
   let moiMeme = null;
@@ -824,7 +1044,7 @@
   function filtrerListe() {
     const q = $('listQ').value.trim().toLowerCase();
     const liste = !q ? sessionsChargees : sessionsChargees.filter((s) =>
-      [s.folderName, s.etab && s.etab.nom, s.etab && s.etab.id, s.user, s.styleLabel, s.outputFolderName]
+      [s.folderName, s.nomEtab, s.etab && s.etab.nom, s.etab && s.etab.id, s.user, s.styleLabel, s.outputFolderName]
         .filter(Boolean).join(' ').toLowerCase().includes(q));
     rendreListe(liste, moiMeme);
   }
@@ -836,6 +1056,7 @@
       $('listRows').innerHTML = '<div class="card"><p class="sub" style="margin:0">Aucune session pour le moment.</p></div>';
       return;
     }
+    const total = sessions.reduce((n, s) => n + (s.cost || 0), 0);
     $('listMeta').innerHTML =
       `<b>${sessions.length}</b> session${sessions.length > 1 ? 's' : ''} · ` +
       `images conservées 14 jours, historique 90 jours`;
@@ -851,6 +1072,7 @@
       String(b[1][0].updatedAt).localeCompare(String(a[1][0].updatedAt)));
 
     $('listRows').innerHTML = groupes.map(([pers, liste]) => {
+      const coutPers = liste.reduce((n, s) => n + (s.cost || 0), 0);
       return `<div class="pers">
         <div class="pershead">
           <b>${esc(pers)}</b>
@@ -872,7 +1094,7 @@
     // Quand il est connu, il passe devant ; le nom du dossier reste affiche
     // a cote pour qu'on retrouve aussi une session par son intitule d'origine.
     const dossier = s.folderName && s.folderName !== 'Import' ? s.folderName : null;
-    const etabNom = s.etab && s.etab.nom;
+    const etabNom = s.nomEtab || (s.etab && s.etab.nom);
     const nom = etabNom && dossier && etabNom !== dossier
       ? `${etabNom} · ${dossier}`
       : etabNom || dossier || (s.mode === 'links' ? 'Import par liens' : 'Fichiers déposés');
@@ -891,7 +1113,7 @@
     const action = s.imagesPurgees && s.status !== 'validated'
       ? '<span class="det">images effacées</span>'
       : s.status === 'validated' && s.outputFolderUrl
-        ? `<a class="det" href="${s.outputFolderUrl}" target="_blank" rel="noopener">ouvrir dans Drive</a>`
+        ? `${s.zip ? `<a class="det" href="/api/sessions/${s.id}/zip" download>⬇ zip</a> · ` : ''}<a class="det" href="${s.outputFolderUrl}" target="_blank" rel="noopener">ouvrir dans Drive</a>`
         : `<button data-open="${s.id}">${s.status === 'validated' ? 'Revoir' : 'Reprendre'}</button>`;
 
     return `<div class="sess">
@@ -957,7 +1179,12 @@
     }));
   }
 
-  const regl = (p) => reglagesLocaux.get(p.id) || { ...DEFAULTS, ...(p.adjust || {}) };
+  const regl = (p) => {
+    if (reglagesLocaux.has(p.id)) return reglagesLocaux.get(p.id);
+    const cur = renduCourant(p);
+    if (cur && cur.kind === 'reglages') return { ...DEFAULTS, ...(cur.adjust || {}) };
+    return { ...DEFAULTS, ...(p.adjust || {}) };
+  };
 
   // Vignette : le rendu retenu, ou l'original si la photo n'a pas été retouchée.
   function urlPhoto(p, w) {
@@ -966,6 +1193,39 @@
       ? `/api/sessions/${session.id}/photos/${p.id}/render/${cur.id}`
       : `/api/sessions/${session.id}/photos/${p.id}/source`;
     return base + (w ? `?w=${w}` : '');
+  }
+
+  const renduCourant = (p) => (p.renders || []).find((r) => r.id === p.currentRenderId) || null;
+
+  // Une photo porte des réglages : soit l'image retenue est un rendu
+  // « Colorimétrie », soit d'anciens réglages attendent encore la validation.
+  function aReglages(p) {
+    const cur = renduCourant(p);
+    return (cur && cur.kind === 'reglages') || !isNeutral(p.adjust);
+  }
+
+  // Image sur laquelle les curseurs s'appliquent. Si l'image retenue est
+  // déjà un rendu « Colorimétrie », on repart de l'image dont il est issu :
+  // les réglages se modifient, ils ne s'empilent pas.
+  function urlBase(p, w) {
+    const cur = renduCourant(p);
+    if (!cur || cur.kind !== 'reglages') return urlPhoto(p, w);
+    const base = cur.from && cur.from !== 'source'
+      ? `/api/sessions/${session.id}/photos/${p.id}/render/${cur.from}`
+      : `/api/sessions/${session.id}/photos/${p.id}/source`;
+    return base + (w ? `?w=${w}` : '');
+  }
+
+  // Même clé que le serveur (route de téléchargement) : la version actuelle
+  // a-t-elle déjà été copiée dans Drive ?
+  function depotFait(p) {
+    const cle = `${p.currentRenderId || 'source'}|${JSON.stringify(p.adjust || {})}|${p.format || 'original'}`;
+    return !!(p.rangeRetouche && p.rangeRetouche.cle === cle);
+  }
+
+  // « 19 octobre 2026 », comme les dossiers Drive.
+  function dateLongue(d = new Date()) {
+    return new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
   }
 
   // Reflete aLivrer() du serveur : par lignee, les retouches si elles
@@ -987,7 +1247,7 @@
     { k: 'toutes', l: 'Toutes', f: () => true },
     { k: 'retouchees', l: 'Retouchées', f: (p) => (p.renders || []).length > 0 },
     { k: 'intactes', l: 'Intactes', f: (p) => (p.renders || []).length === 0 && p.kind !== 'video' },
-    { k: 'reglees', l: 'Colorimétrie', f: (p) => !isNeutral(p.adjust) },
+    { k: 'reglees', l: 'Colorimétrie', f: (p) => aReglages(p) },
     { k: 'echec', l: 'En échec', f: (p) => p.status === 'error' },
     { k: 'videos', l: 'Vidéos', f: (p) => p.kind === 'video' },
   ];
@@ -995,69 +1255,72 @@
 
   // Établissement modifiable + compléter la session, directement sur l'écran
   // Import : répond au besoin de revenir corriger l'établissement ou ajouter
-  // des photos oubliées sans perdre la session déjà créée.
+  // des photos oubliées sans perdre la session déjà créée. Concerne les
+  // sessions Drive et liens ; le dépôt de fichiers classique n'en a pas
+  // besoin (l'établissement s'y choisit déjà avant le chargement).
   let etabEditEmpreinte = null;
   let etabFormOuvert = false;
   function renderEtabEdit(s) {
     const box = $('etabEditBlock');
-    if (!s || s.status === 'validated') { etabEditEmpreinte = null; etabFormOuvert = false; box.innerHTML = ''; return; }
+    if (!s || s.status === 'validated') {
+      etabEditEmpreinte = null; etabFormOuvert = false; box.innerHTML = '';
+      return;
+    }
 
-    // Reconstruit toutes les 2 s par le sondage tant qu'une génération
-    // tourne : si rien de ce qui s'affiche ici n'a changé, on ne touche pas
-    // au DOM, pour ne pas fermer le petit formulaire "modifier" si quelqu'un
-    // l'avait ouvert, et pour ne pas faire bouger la hauteur de ce bloc
-    // (donc le reste de la page) sans raison.
     const emp = JSON.stringify([s.mode, s.etab]);
     if (emp === etabEditEmpreinte) return;
     etabEditEmpreinte = emp;
 
     const etabTxt = s.etab ? `${esc(s.etab.id)} - ${esc(s.etab.nom)}` : 'non défini';
+    const sansDossier = !s.etab || !s.etab.folderId;
+    // Compléter la session : un nouveau lien en mode liens, d'autres
+    // fichiers en mode dépôt. Rien en mode Drive : le dossier du shooting
+    // n'est jamais modifié, l'outil n'y ajoute que « Retouche - date ».
     const ajouterBtn = s.mode === 'links'
-      ? `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter des médias</button>`
+      ? `<button class="mini" id="btnAjouterMedias" type="button">+ Ajouter un lien</button>`
       : '';
 
     box.innerHTML = `
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span class="hint" style="margin:0">Établissement : <b>${etabTxt}</b></span>
-        <button class="mini" id="btnEtabModifier" type="button">modifier</button>
+        <span class="hint" style="margin:0">Établissement : <b>${etabTxt}</b>${sansDossier
+          ? ' <span style="color:var(--err)">· aucun dossier Drive relié, les téléchargements ne sont pas copiés</span>' : ''}</span>
+        <button class="mini" id="btnEtabModifier" type="button">${sansDossier ? 'choisir' : 'modifier'}</button>
         ${ajouterBtn}
       </div>
-      ${s.mode === 'drive' ? `
+      ${s.mode === 'upload' ? `
         <div id="dropDriveMedia" tabindex="0" role="button"
              style="margin-top:10px;border:2px dashed var(--line);border-radius:10px;padding:14px;
                     text-align:center;color:var(--muted);font-size:13px;cursor:pointer">
-          Glisse une photo ici pour l'ajouter à cette session<br />
-          <small>Elle sera aussi envoyée dans ton dossier Drive de départ.</small>
+          Glisse d'autres photos ou vidéos ici pour les ajouter à cette session<br />
+          <small>Elles seront rangées dans Contenu gérant / ${esc(dateLongue())}.</small>
         </div>
         <input type="file" id="dropDriveInput" accept="image/*,video/*" multiple hidden />
       ` : ''}
-      <div id="etabModifierForm" style="display:${etabFormOuvert ? 'block' : 'none'};margin-top:10px;max-width:340px">
-        <label for="etabEditId">ID</label>
-        <input type="text" id="etabEditId" value="${s.etab ? esc(s.etab.id) : ''}" />
-        <label for="etabEditNom">Nom</label>
-        <input type="text" id="etabEditNom" value="${s.etab ? esc(s.etab.nom) : ''}" />
-        <button class="ghost wide" id="btnEtabValider" type="button">Enregistrer</button>
-      </div>`;
+      <div id="etabModifierForm" style="display:${etabFormOuvert ? 'block' : 'none'};margin-top:10px;max-width:420px"></div>`;
+
+    // Même recherche / création que sur l'écran Import : un établissement est
+    // toujours relié à son dossier Drive.
+    monterChoixEtab($('etabModifierForm'), {
+      onChange: async (e) => {
+        if (!e) return;
+        try {
+          session = await api(`/api/sessions/${s.id}/etab`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(e),
+          });
+          etabFormOuvert = false;
+          render();
+        } catch (err) { showErr('planErr', err.message); }
+      },
+    });
 
     $('btnEtabModifier').addEventListener('click', () => {
       etabFormOuvert = !etabFormOuvert;
       $('etabModifierForm').style.display = etabFormOuvert ? 'block' : 'none';
     });
 
-    $('btnEtabValider').addEventListener('click', async () => {
-      const id = $('etabEditId').value.trim();
-      const nom = $('etabEditNom').value.trim();
-      if (!id || !nom) return showErr('planErr', "Renseigne l'ID et le nom de l'établissement.");
-      try {
-        session = await api(`/api/sessions/${s.id}/etab`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, nom }),
-        });
-        render();
-      } catch (e) { showErr('planErr', e.message); }
-    });
 
-    if (s.mode === 'drive') {
+    if (s.mode === 'upload') {
       const dz = $('dropDriveMedia');
       const enverMedias = async (fichiers) => {
         const ok = [...fichiers].filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
@@ -1087,7 +1350,7 @@
         enverMedias(e.dataTransfer.files);
       });
       $('dropDriveInput').addEventListener('change', (e) => enverMedias(e.target.files));
-    } else {
+    } else if (s.mode === 'links') {
       $('btnAjouterMedias').addEventListener('click', () => {
         ajoutPourSession = s.id;
         previewId = null;
@@ -1097,8 +1360,9 @@
         tab = 'links';
         document.querySelectorAll('.entry').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'links'));
         $('pDrive').classList.remove('on');
+        $('pDrop').classList.remove('on');
         $('pLinks').classList.add('on');
-        if (s.etab) choisirEtab({ ...s.etab });
+        if (s.etab) choixEtabSetup.set({ ...s.etab });
         $('setupTitle').textContent = 'Ajouter des médias à cette session';
         montrer('setup');
         majSetup();
@@ -1107,20 +1371,26 @@
   }
 
   function render() {
-    // Le sondage (toutes les 2 s tant qu'une génération tourne) redessine ce
-    // bloc, l'en-tête et le bandeau établissement à chaque passage — même
-    // quand rien n'y a changé. Un simple changement de hauteur au-dessus de
-    // la grille (une ligne d'erreur qui apparaît, un bouton qui change de
-    // largeur...) suffit à décaler tout ce qu'on regarde plus bas, ce qui se
-    // voit comme un retour en haut de page en pleine sélection. On mémorise
-    // la position de défilement avant de reconstruire, et on la restaure une
-    // fois la mise en page stabilisée.
+    // Le sondage (toutes les 2 s tant qu'une génération tourne) redessine
+    // l'en-tête et le bandeau établissement à chaque passage, même quand rien
+    // n'y a changé. Un simple changement de hauteur au-dessus de la grille
+    // suffit à décaler tout ce qu'on regarde plus bas, ce qui se voit comme
+    // un retour en haut de page en pleine sélection. On mémorise la position
+    // de défilement avant de reconstruire, et on la restaure une fois la
+    // mise en page stabilisée.
     const yAvant = window.scrollY;
 
     const ps = photos();
     const pretes = ps.filter((p) => p.status === 'ok' && !p.busy).length;
+    const cout = session.cost || 0;
 
-    $('planTitle').textContent = (session.source && session.source.folderName) || 'Plan de travail';
+    {
+      const dossier = session.source && session.source.folderName;
+      const etabT = session.nomEtab;
+      $('planTitle').textContent = etabT && dossier && dossier !== 'Import' && dossier !== etabT
+        ? `${etabT} · ${dossier}`
+        : etabT || dossier || 'Plan de travail';
+    }
     // Ce que la validation enverra : les retouches d'une photo, ou son
     // original si elle n'en a aucune. Meme regle que le serveur.
     const aEnvoyer = compterALivrer(ps);
@@ -1129,29 +1399,61 @@
       session.status === 'running' ? '<span>génération en cours…</span>' : '',
     ].filter(Boolean).join('');
 
-    $('destLine').innerHTML = session.destination === 'source'
-      ? `Destination : sous-dossier <b>${esc((session.source && session.source.folderName) || '')}_retouches</b>.`
-      : `Destination : <b>${esc(session.etab ? session.etab.nom : '')}_social media</b>.`;
+    {
+      const rg = session.rangement || {};
+      const lienDossier = (d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.name)}</a>`;
+      const orig = session.mode === 'drive'
+        ? 'Originaux : dossier du shooting.'
+        : rg.originaux ? `Originaux rangés dans ${lienDossier(rg.originaux)}.`
+        : `Originaux en cours de rangement dans <b>${session.mode === 'links' ? 'Social media' : 'Contenu gérant'}</b>…`;
+      const ret = rg.retouches
+        ? ` Versions finales dans ${lienDossier(rg.retouches)}.`
+        : ` Versions finales (retouches, ou originaux non retouchés) dans <b>Retouche - ${esc(dateLongue())}</b> au téléchargement ou à la validation.`;
+      $('destLine').innerHTML = orig + ret;
+    }
 
     renderEtabEdit(session);
 
     if (avertPrompts) showErr('planErr', avertPrompts);
+    // Échec de création d'une image « Colorimétrie » : signalé une fois.
+    for (const p of ps) {
+      const cle = p.id + '|' + (p.reglagesErreur || '');
+      if (p.reglagesErreur && !erreursMontrees.has(cle)) {
+        erreursMontrees.add(cle);
+        showErr('planErr', `${[p.base, ...(p.suffixes || [])].join('_')} : ${p.reglagesErreur}`);
+      }
+    }
     majValidation();
 
     if (session.status === 'validated') {
-      const lien = `<a href="${session.outputFolderUrl}" target="_blank" rel="noopener">Ouvrir le dossier dans Drive</a>`;
+      // Zip des versions finales, en un clic, sans passer par le Drive.
+      const zipDispo = session.delivery === 'zip' || photos().some((p) => p.rangeRetouche && p.rangeRetouche.fileId);
+      const lienDrive = session.outputFolderUrl
+        ? `<a href="${esc(session.outputFolderUrl)}" target="_blank" rel="noopener">Ouvrir le dossier dans Drive</a>` : '';
+      const boutonZip = zipDispo
+        ? `<a class="validate" id="btnZip" href="/api/sessions/${session.id}/zip" download
+             style="display:inline-block;text-decoration:none;margin-top:14px">⬇ Télécharger le zip</a>` : '';
+      // « Repartir » ouvre le dossier des ORIGINAUX, jamais « Retouche - … » :
+      // sinon les nouvelles retouches se rangeraient dans un dossier
+      // « Retouche » imbriqué dans le premier.
+      const rgFin = session.rangement || {};
+      const dossierOriginaux = session.mode === 'drive'
+        ? (session.source && session.source.folderId ? `https://drive.google.com/drive/folders/${session.source.folderId}` : null)
+        : rgFin.originaux && rgFin.originaux.id ? `https://drive.google.com/drive/folders/${rgFin.originaux.id}`
+        : (rgFin.originaux && rgFin.originaux.url) || null;
       // Les images de travail sont supprimees a la validation : on ne peut
       // plus retoucher CETTE session. Mais les fichiers livres sont dans
       // Drive, donc on propose d'en repartir en un clic plutot que de
       // reuploader les originaux a la main.
-      const repart = session.outputFolderUrl
-        ? `<button class="mini" id="btnRepartir" style="margin-top:12px">Repartir de ce dossier pour retoucher</button>`
+      const repart = dossierOriginaux
+        ? `<button class="mini" id="btnRepartir" style="margin-top:12px">Repartir des originaux pour retoucher</button>`
         : '';
       $('grid').innerHTML = `<div class="card">
-        <h2>Envoyé le ${new Date(session.updatedAt || session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</h2>
-        <p class="sub" style="margin:8px 0 0"><b>${session.validatedCount}</b> élément${session.validatedCount > 1 ? 's' : ''}
-        dans <b>${esc(session.outputFolderName || '')}</b>. ${lien}</p>
-        ${repart}</div>`;
+        <h2>Rangé le ${new Date(session.updatedAt || session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</h2>
+        <p class="sub" style="margin:8px 0 0">${session.validatedCount
+          ? `<b>${session.validatedCount}</b> fichier${session.validatedCount > 1 ? 's' : ''} prêt${session.validatedCount > 1 ? 's' : ''} dans <b>${esc(session.outputFolderName || '')}</b>.`
+          : 'Rien à ranger.'} ${lienDrive}</p>
+        ${boutonZip}<br />${repart}</div>`;
       $('gChips').innerHTML = ''; $('gCount').textContent = '';
       if ($('btnRepartir')) {
         $('btnRepartir').addEventListener('click', async () => {
@@ -1160,7 +1462,7 @@
           try {
             const d = await api('/api/sessions', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ driveUrl: session.outputFolderUrl, destination: 'source' }),
+              body: JSON.stringify({ driveUrl: dossierOriginaux, destination: 'source', etab: session.etab }),
             });
             sessionId = d.sessionId;
             selected.clear(); reglagesLocaux.clear(); imgCache.clear();
@@ -1168,7 +1470,7 @@
           } catch (e) {
             showErr('planErr', e.message);
             $('btnRepartir').disabled = false;
-            $('btnRepartir').textContent = 'Repartir de ce dossier pour retoucher';
+            $('btnRepartir').textContent = 'Repartir des originaux pour retoucher';
           }
         });
       }
@@ -1238,6 +1540,7 @@
   function empreinte(g) {
     return JSON.stringify(g.visibles.map((p) => [
       p.id, p.currentRenderId, p.status, !!p.busy, p.kind, p.suffixes || [], p.adjust,
+      p.rangeRetouche ? p.rangeRetouche.cle : null, p.depotErreur || null, !!p.archive, p.archiveErreur || null,
       (p.renders || []).length,
     ]));
   }
@@ -1285,8 +1588,8 @@
     //
     // MAIS replaceChildren() detache et rattache TOUS les enfants a chaque
     // appel, meme quand on lui redonne exactement ceux deja presents dans le
-    // meme ordre : le DOM se retrouve un instant sans grille (juste le temps
-    // du remplacement), et un navigateur scrolle deja plus bas que cette
+    // meme ordre : le DOM se retrouve un instant sans grille (le temps du
+    // remplacement), et un navigateur scrolle deja plus bas que cette
     // hauteur reduite recale la position en haut, sans jamais la restaurer.
     // C'est ce qui coupait la selection en pleine page quand on cochait une
     // case loin dans la liste : chaque clic ne change QUE l'etat coche/decoche
@@ -1392,7 +1695,10 @@
     const fmt = cur && cur.ext ? cur.ext.toUpperCase() : '';
     const stats = p.kind === 'video' ? '' : `<div class="pstats">
       ${fmt ? `<span>${fmt}${dims ? ' ' + dims : ''}</span>` : ''}
-      ${!isNeutral(p.adjust) ? '<span class="tg">colorimétrie</span>' : ''}
+      ${aReglages(p) ? '<span class="tg">colorimétrie</span>' : ''}
+      ${depotFait(p) ? '<span class="tg" title="Cette version est dans « Retouche - date », prête pour le back-office">☁ dans Retouche</span>' : ''}
+      ${p.archiveErreur ? `<span class="tg" style="color:var(--err)" title="${esc(p.archiveErreur)}">original non rangé</span>` : ''}
+      ${p.depotErreur ? `<span class="tg" style="color:var(--err)" title="${esc(p.depotErreur)}">copie Drive en échec</span>` : ''}
       ${cur && cur.lumFinal != null ? `<span>lum. ${cur.lumFinal}/100</span>` : ''}
       ${(p.renders || []).length > 1 ? `<span>${(p.renders || []).length} rendus</span>` : ''}
     </div>`;
@@ -1438,7 +1744,14 @@
           } else if (el.checked) selected.add(id);
           else selected.delete(id);
           dernierClic = id;
+          // Le compteur au-dessus de la grille ("N sélectionnées") change de
+          // longueur avec la sélection : Chrome ajuste alors tout seul le
+          // défilement pour garder le même contenu visuellement en place
+          // (scroll anchoring), ce qui déplace légèrement la page. On annule
+          // cet ajustement pour rester exactement où on était.
+          const yAvant = window.scrollY;
           renderGrille();
+          restaurerScroll(yAvant);
         } catch (err) { signalerBug('à la sélection', err); }
       });
     });
@@ -1557,7 +1870,7 @@
     } else if (cmpMode === 'cote') {
       $('dVue').innerHTML = `<div class="dpair">
         <div class="dcol"><div class="dlab">Original</div><img src="${urlAvant}" alt="Original" /></div>
-        <div class="dcol"><div class="dlab">${cur ? 'Résultat · ' + esc(cur.promptLabel) : 'Avec réglages'}</div>${coucheApres(p, a)}</div>
+        <div class="dcol"><div class="dlab">${reglagesLocaux.has(p.id) ? 'Aperçu · réglages non enregistrés' : cur ? 'Résultat · ' + esc(cur.promptLabel) : 'Avec réglages'}</div>${coucheApres(p, a)}</div>
       </div>`;
     } else {
       // L'avant est la base, l'apres est rogne a DROITE de la poignee.
@@ -1593,12 +1906,6 @@
         <output>${a[c] > 0 ? '+' : ''}${a[c]}</output>
       </div>`).join('');
     $('dSave').disabled = !reglagesLocaux.has(p.id);
-    if ($('dStyle').innerHTML !== $('rStyle').innerHTML) {
-      const garde = $('dStyle').value;
-      $('dStyle').innerHTML = $('rStyle').innerHTML;
-      if (garde) $('dStyle').value = garde;
-    }
-    majDetailLibre();
 
     bindDetail();
     if (!isNeutral(a) && !p.busy && p.status !== 'error') dessiner(p.id);
@@ -1613,7 +1920,7 @@
     const clip = enGliss ? ` style="clip-path: inset(0 0 0 ${cmpPos}%)"` : '';
     const id = enGliss ? ' id="cmpOver"' : '';
     return isNeutral(a)
-      ? `<img class="${cls}"${id}${clip} src="${urlPhoto(p, 700)}" alt="Après" />`
+      ? `<img class="${cls}"${id}${clip} src="${urlBase(p, 700)}" alt="Après" />`
       : `<canvas class="${cls}"${id}${clip} data-canvas="${p.id}"></canvas>`;
   }
 
@@ -1716,48 +2023,9 @@
 
   // Lancer un prompt sur la seule photo ouverte, sans repasser par la grille :
   // c'est dans le detail qu'on itere.
-  // Le menu du detail contient aussi "Ecrire un prompt". Avant, il envoyait
-  // la valeur "__libre__" au serveur comme s'il s'agissait d'un identifiant
-  // de prompt, sans zone de texte : le lancement echouait systematiquement.
-  function majDetailLibre() {
-    const libre = $('dStyle').value === '__libre__';
-    $('dLibre').style.display = libre ? 'flex' : 'none';
-    $('dRun').disabled = libre && !$('dPrompt').value.trim();
-    if (libre) $('dPrompt').focus();
-  }
-  $('dStyle').addEventListener('change', majDetailLibre);
-  $('dPrompt').addEventListener('input', () => {
-    $('dRun').disabled = $('dStyle').value === '__libre__' && !$('dPrompt').value.trim();
-  });
-
-  $('dRun').addEventListener('click', async () => {
-    const p = parId(detailId);
-    if (!p) return;
-    const libre = $('dStyle').value === '__libre__';
-    if (libre && !$('dPrompt').value.trim()) {
-      return showErr('planErr', 'Écris ton prompt avant de lancer.');
-    }
-    $('dRun').disabled = true;
-    $('dRun').textContent = 'Lancement…';
-    try {
-      const corps = {
-        photoIds: [p.id], model: FIXED_MODEL,
-        from: $('dFrom').value, mode: $('dMode').value,
-      };
-      if (libre) {
-        corps.prompt = $('dPrompt').value.trim();
-        corps.promptLabel = $('dLabel').value.trim();
-      } else {
-        corps.style = $('dStyle').value;
-      }
-      await api(`/api/sessions/${session.id}/rerun`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(corps),
-      });
-      startPolling();
-    } catch (e) { showErr('planErr', e.message); }
-    finally { $('dRun').disabled = false; $('dRun').textContent = 'Lancer sur cette photo'; }
-  });
+  // Plus de lancement de prompt dans le detail : les CSM cliquaient sur
+  // « Lancer sur cette photo » au lieu de « Enregistrer les reglages ». Le
+  // detail sert aux reglages ; les prompts se lancent depuis la grille.
 
   function chargerImage(id, src) {
     if (imgCache.has(id + src)) return Promise.resolve(imgCache.get(id + src));
@@ -1774,7 +2042,7 @@
     const p = parId(photoId);
     if (!cv || !p) return;
     try {
-      const src = urlPhoto(p, 700);
+      const src = urlBase(p, 700);
       const im = await chargerImage(photoId, src);
       cv.width = im.naturalWidth;
       cv.height = im.naturalHeight;
@@ -1806,10 +2074,24 @@
         body: JSON.stringify({ photoIds, adjust }),
       });
       for (const id of photoIds) reglagesLocaux.delete(id);
-      session = await api('/api/sessions/' + sessionId);
-      render();
+      // La nouvelle image se fabrique côté serveur, en pleine résolution :
+      // le sondage affiche « en cours » puis le résultat.
+      startPolling();
     } catch (e) { showErr('planErr', e.message); }
   }
+
+  // Après un téléchargement, la copie Drive se fait côté serveur : on
+  // rafraîchit un peu plus tard pour afficher « dans Drive » sur la photo.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href$="/download"]');
+    if (!a || !sessionId) return;
+    for (const ms of [3500, 9000]) {
+      setTimeout(async () => {
+        if (!session || session.status === 'running' || session.status === 'validating') return;
+        try { session = await api('/api/sessions/' + sessionId); render(); } catch {}
+      }, ms);
+    }
+  });
 
   async function supprimer(id) {
     try {
@@ -1882,7 +2164,7 @@
       const libre = $('rStyle').value === '__libre__';
       const ids = [...selected].filter((id) => { const p = parId(id); return p && p.kind !== 'video'; });
       if (ids.length === 0) throw new Error('Aucune photo sélectionnée.');
-      const corps = { photoIds: ids, model: FIXED_MODEL, from: $('rFrom').value, mode: $('rMode').value };
+      const corps = { photoIds: ids, model: $('rModel').value, from: $('rFrom').value, mode: $('rMode').value };
       if (libre) {
         const txt = $('rPrompt').value.trim();
         if (!txt) throw new Error('Écris ton prompt avant de lancer.');
@@ -1916,11 +2198,8 @@
       return;
     }
     b.classList.remove('show');
-    $('validate').textContent = 'Valider et envoyer';
-    const livrables = photos().filter((p) =>
-      p.status !== 'deleted' && p.status !== 'error' &&
-      (p.kind === 'video' || p.currentRenderId || (p.renders || []).length === 0)).length;
-    $('validate').disabled = session.status === 'running' || livrables === 0 || session.status === 'validated';
+    $('validate').textContent = 'Valider et ranger dans Retouche';
+    $('validate').disabled = session.status === 'running' || session.status === 'validated';
   }
 
   $('validate').addEventListener('click', async () => {
@@ -1937,7 +2216,7 @@
       showErr('planErr', e.message);
       $('valbox').classList.remove('show');
       $('validate').disabled = false;
-      $('validate').textContent = 'Valider et envoyer';
+      $('validate').textContent = 'Valider et ranger dans Retouche';
     }
   });
 
