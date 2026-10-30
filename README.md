@@ -4,7 +4,7 @@ Version de l'outil de retouche photo destinée au prestataire ABL. On importe de
 
 Cette version est construite sur le même code que l'outil CX (dépôt `photo-vitrine`). Seuls les réglages propres au prestataire diffèrent (voir « Différences avec l'outil CX »). Une correction faite dans l'outil CX peut donc être reportée ici telle quelle, fichier par fichier, sauf pour les fichiers listés dans cette section.
 
-La version déployée s'affiche en haut à droite de l'outil (par exemple `v2.1-abl-shooting`).
+La version déployée s'affiche en haut à droite de l'outil (par exemple `v2.2-abl`).
 
 ---
 
@@ -13,15 +13,14 @@ La version déployée s'affiche en haut à droite de l'outil (par exemple `v2.1-
 | | CX (interne) | ABL (prestataire) |
 |---|---|---|
 | Connexion | Google, comptes @joy.io / @privateaser.com | Identifiant + mot de passe, compte unique |
-| Import | Dossier Drive, fichiers déposés, liens | Dossier Drive, **nouveau shooting (zip Shoootin)**, liens |
-| Rangement des liens | `Social media` | `Social media / <date du jour>` |
+| Import | Dossier Drive, « Déposer des fichiers » (shooting original ou contenu gérant), liens | Dossier Drive, « Un nouveau shooting » (zip Shoootin), liens — pas de contenu gérant |
 | Prompts | Base Notion « Prompts retouche photo » | Base Notion dédiée, via `NOTION_PUBLIC_PAGE` |
 | Modèle IA | Choix entre plusieurs modèles | Nano Banana Pro fixé, pas de sélecteur |
 | Coût FLORA | Affiché | Masqué |
 | « En partant de » / « et en » | Toujours visibles | Repliés dans « Réglages avancés » |
-| Suivi Google Sheet | Oui (`tracker.js`, `stats.js`) | Non, traité autrement |
+| Suivi Google Sheet | Onglets `CX` et `Détail retouches` | Onglets `ABL` et `Détail retouches ABL` du même Sheet, retoucheur « ABL » |
 
-Fichiers propres à ABL, à ne pas écraser avec ceux de CX : `auth.js`, `hash-password.js`, `shooting.js`, `config.js` (dont `socialParDate: true`), `models.js`, `server.js` (connexion, import de shooting, pas de suivi, pas de dépôt de fichiers), `index.html` (mêmes différences côté interface), `package.json` et `package-lock.json` (bibliothèque `yauzl` pour les zips), `README.md`.
+Fichiers propres à ABL, à ne pas écraser avec ceux de CX : `auth.js`, `hash-password.js`, `config.js`, `models.js`, `server.js` (connexion, import de shooting, onglets de suivi ABL, pas de contenu gérant), `index.html` (mêmes différences côté interface), `README.md`. Les autres fichiers, dont `shooting.js`, `rangement.js`, `workplan.js`, `tracker.js` et `stats.js`, sont identiques à ceux de l'outil CX.
 
 ---
 
@@ -31,7 +30,7 @@ Fichiers propres à ABL, à ne pas écraser avec ceux de CX : `auth.js`, `hash-p
 
 Rien ne peut être importé sans établissement. On le cherche par **nom** ou par **ID** parmi les dossiers du grand dossier Drive des établissements (`PARENT_FOLDER_ID`), nommés `ID - Nom de l'établissement`.
 
-S'il n'existe pas, l'outil propose de créer le dossier `ID - Nom`. La création est refusée si l'ID existe déjà : l'outil propose alors le dossier existant, pour éviter les doublons dus à une faute de frappe.
+S'il n'existe pas, l'outil propose de créer le dossier `ID - Nom`, avec d'emblée ses trois sous-dossiers : `Shooting`, `Contenu gérant` et `Social media` (comme dans l'outil CX, même si ABL n'alimente pas `Contenu gérant`). La création est refusée si l'ID existe déjà : l'outil propose alors le dossier existant, pour éviter les doublons dus à une faute de frappe.
 
 L'établissement peut être corrigé en cours de session, depuis le plan de travail.
 
@@ -63,6 +62,7 @@ Dans le plan de travail :
 
 - **Prompts IA** (depuis la grille) : on sélectionne des photos, on choisit un prompt et on lance. Par défaut, on part de l'image actuelle en ajoutant une variante ; « Réglages avancés » permet de partir de la photo d'origine ou de remplacer l'image. Les prompts viennent de la base Notion dédiée et sont exécutés par FLORA avec Nano Banana Pro.
 - **Recadrage** : format vitrine 1500×750, photo entière centrée avec des bords vides (PNG transparent). Sans IA, gratuit. Appliqué automatiquement aux photos récupérées par lien. Un prompt IA lancé sur une photo recadrée repart de l'image sous le recadrage, pour ne pas travailler sur une image réduite.
+- **Fin des générations** : quand un lot de retouches IA se termine, une fenêtre l'annonce (nombre de photos prêtes et éventuels échecs) et le titre de l'onglet du navigateur passe à « ✓ Générations terminées » ; s'il est en arrière-plan, l'onglet clignote.
 - **Colorimétrie** (bouton « régler » sur une photo) : luminosité, contraste, saturation, température. « Enregistrer les réglages » ou « Appliquer à la sélection » crée une vraie nouvelle image en pleine résolution, sans IA. Les réglages ne s'empilent pas : les modifier repart de l'image de départ. La vue de réglage ne propose pas de prompt, volontairement : on ferme les réglages pour lancer un prompt depuis la grille.
 
 ### Qualité des images
@@ -116,6 +116,16 @@ Le compte de service Google doit être **éditeur** sur le grand dossier des ét
 
 ---
 
+## Suivi
+
+Chaque session alimente le Google Sheet de suivi général « Tracking des retouches - outil CX » (`SUIVI_SHEET_ID`), dans des onglets propres à ABL, créés automatiquement :
+- `ABL` : une ligne par session, même structure que l'onglet `CX` ; le retoucheur est toujours « ABL ». Ne pas déplacer la colonne I (ID session) : l'outil s'en sert pour retrouver la ligne.
+- `Détail retouches ABL` : une ligne par retouche et par session (prompt, recadrage, colorimétrie, nombre de photos), pour les statistiques.
+
+Au premier démarrage, les sessions ABL déjà validées (moins de 90 jours) sont ajoutées au Sheet, à raison d'une toutes les 5 secondes. Le code est dans `tracker.js` et `stats.js`, identiques à l'outil CX. Sans `SUIVI_SHEET_ID`, le suivi est simplement désactivé.
+
+---
+
 ## Déploiement
 
 Railway construit l'image avec le `Dockerfile` : Node 22, plus Python pour `gallery-dl` et `yt-dlp` avec `curl-cffi` (import par liens, dont TikTok) et `ffmpeg` (assemblage image + son des vidéos).
@@ -150,6 +160,7 @@ Copier la valeur affichée dans la variable `APP_PASSWORD_HASH` sur Railway. Cha
 | `PARENT_FOLDER_ID` | Grand dossier Drive des établissements. |
 | `FLORA_API_KEY`, `FLORA_WORKSPACE_ID`, `FLORA_PROJECT_ID` | Retouches IA. |
 | `FLORA_RESOLUTION` | Résolution des sorties IA (`2K` par défaut). |
+| `SUIVI_SHEET_ID` | Google Sheet de suivi général (le même que l'outil CX). Le compte de service doit en être éditeur. |
 | `NOTION_PUBLIC_PAGE` | Base Notion dédiée des prompts ABL, publiée sur le web. À défaut, `NOTION_API_KEY` + `NOTION_STYLES_DB_ID`. |
 | `INSTAGRAM_COOKIES_TXT` | Cookies Instagram, pour les posts qui exigent une connexion. |
 | `DATA_DIR` | Dossier du volume (`/data` par défaut). |
@@ -176,12 +187,14 @@ Copier la valeur affichée dans la variable `APP_PASSWORD_HASH` sur Railway. Cha
 | `shooting.js` | Import d'un nouveau shooting : décompression du zip, mois d'après la date des photos, rangement dans `Shooting / <mois>`. |
 | `notion.js`, `notionPublic.js`, `styleSource.js`, `builtinStyles.js` | Liste des prompts (Notion, plus le recadrage intégré). |
 | `models.js` | Modèle IA (Nano Banana Pro uniquement). |
+| `tracker.js`, `stats.js` | Suivi dans le Google Sheet (onglets `ABL`). |
 | `auth.js`, `hash-password.js`, `config.js` | Connexion par identifiant et mot de passe, et configuration. |
 
 ---
 
 ## Historique
 
+- **v2.2 — suivi et dossiers.** Suivi dans le Google Sheet général (onglets `ABL` et `Détail retouches ABL`, retoucheur « ABL »), avec les sessions déjà validées. Trois sous-dossiers créés avec chaque nouvel établissement. Fenêtre et titre d'onglet à la fin des générations.
 - **v2.1 — import des shootings.** Nouveau mode « Un nouveau shooting » : dépôt du zip Shoootin, rangement automatique dans `Shooting / <mois du shooting>` d'après la date des photos, ouverture directe de la session de retouche. Les originaux récupérés par lien sont rangés dans `Social media / <date du jour>`.
 - **v2 — alignement sur l'outil CX (v21.1).** Corrections : la colorimétrie ne fait plus échouer la validation sur les JPEG et crée une vraie nouvelle image, téléchargée et livrée ; vidéos Instagram récupérées avec le son ; vidéos TikTok fonctionnelles ; noms de fichiers accentués ; plus de fichiers en double. Images IA demandées en 2K. Nouveautés : établissement obligatoire dès l'étape 1 avec recherche par nom ou ID et création du dossier si besoin ; sélecteur de sous-dossiers en mode Drive ; rangement automatique (`Social media`, `Retouche - <date>` avec uniquement les versions finales) ; recadrage automatique des photos récupérées par lien ; bouton « Télécharger le zip » ; plus de prompt dans la vue de réglage ; plus d'ajout de fichiers dans un dossier de shooting.
 - **v1 — outil ABL.** Première version, issue de l'outil CX v14 : connexion par identifiant et mot de passe, import par dossier Drive ou par liens, 5 prompts dédiés, Nano Banana Pro fixé, coût masqué, livraison dans `<dossier>_retouches` ou `<Nom>_social media`.

@@ -27,6 +27,9 @@ export const config = {
   // notion.so/api/v3, non documentee et sans version epinglee.
   notionPublicPage: env('NOTION_PUBLIC_PAGE', ''),
 
+  // Suivi des retouches : meme Google Sheet que l'outil CX, onglet « ABL ».
+  suiviSheetId: env('SUIVI_SHEET_ID', ''),
+
 };
 
 // --- Ajouts plan de travail ---------------------------------------------------

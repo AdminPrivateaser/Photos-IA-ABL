@@ -27,6 +27,7 @@ import { createLinksService } from './links.js';
 import { diagnostic as socialDiagnostic } from './social.js';
 import { createBackends } from './assets.js';
 import { createWorkplan, MIME } from './workplan.js';
+import { createTracker } from './tracker.js';
 import { createShootings } from './shooting.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,7 +69,23 @@ const drive = createDrive({ serviceAccountJson: config.googleServiceAccountJson 
 const store = createStore({ dir: appConfig.dataDir });
 const backends = createBackends({ drive, dir: appConfig.dataDir, parentFolderId: appConfig.parentFolderId });
 const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency, socialParDate: appConfig.socialParDate });
-// Pas de suivi Google Sheet dans la version ABL : il est traite autrement.
+// Suivi dans le Google Sheet general, onglet « ABL ». Retoucheur : toujours
+// « ABL » (compte unique du prestataire).
+const tracker = createTracker({
+  serviceAccountJson: config.googleServiceAccountJson,
+  spreadsheetId: config.suiviSheetId,
+  dir: appConfig.dataDir,
+  store,
+  outil: 'ABL',
+  onglet: { nom: 'ABL', creer: true },
+  ongletDetail: 'Détail retouches ABL',
+  retoucheur: () => 'ABL',
+  importerValidees: true,
+  catalogue: async () => {
+    const d = await styleSource.listStyles();
+    return new Set((d.styles || []).map((x) => x.label));
+  },
+});
 
 // Etablissement choisi au demarrage : OBLIGATOIRE pour toute nouvelle
 // session, quel que soit le mode, et toujours relie a son dossier Drive
@@ -179,6 +196,9 @@ app.get('/api/etabs', async (req, res) => {
   }
 });
 
+// Sous-dossiers crees avec chaque nouvel etablissement (outils CX et ABL).
+const SOUS_DOSSIERS_ETAB = ['Shooting', 'Contenu gérant', 'Social media'];
+
 // Creation d'un dossier etablissement "{ID} - {nom}" sous PARENT_FOLDER_ID,
 // quand la recherche n'a rien trouve. Refusee si l'ID existe deja : une
 // faute de frappe sur le nom ne doit pas creer un doublon.
@@ -200,6 +220,12 @@ app.post('/api/etabs', async (req, res) => {
       });
     }
     const dossier = await drive.createFolder(`${id} - ${nom}`, appConfig.parentFolderId);
+    // Les trois sous-dossiers de tout etablissement, crees d'emblee (meme
+    // « Contenu gérant », que l'outil ABL n'alimente pas : un dossier
+    // d'etablissement est identique quel que soit l'outil qui l'a cree).
+    for (const sous of SOUS_DOSSIERS_ETAB) {
+      await drive.createFolder(sous, dossier.id).catch((e) => console.warn('[etabs] sous-dossier', sous, msg(e)));
+    }
     console.log(`[etabs] dossier cree : ${dossier.name} par ${req.user.login}`);
     res.json({ folderId: dossier.id, name: dossier.name, etab: { id, nom } });
   } catch (e) {
@@ -563,6 +589,10 @@ app.post('/api/sessions/:id/validate', async (req, res) => {
 
     workplan
       .validate({ sessionId: req.params.id })
+      .then((v) => {
+        // Suivi : seulement une validation reellement aboutie.
+        if (v && v.status === 'validated') tracker.validation(v.id, aLivrer(v).map((p) => p.id));
+      })
       .catch((e) => console.error('[validate]', msg(e)));
   } catch (e) {
     if (!res.headersSent) res.status(400).json({ error: msg(e) });
@@ -689,6 +719,7 @@ app.get('/api/sessions/:id/photos/:photoId/download', async (req, res) => {
       `attachment; filename="${nomAscii}"; filename*=UTF-8''${encodeURIComponent(nomFichier)}`,
     );
     res.send(buffer);
+    tracker.telechargement(s.id, [p.id]);
 
     // Rangement automatique APRES l'envoi : un souci Drive ne doit jamais
     // bloquer le telechargement. La version telechargee, si c'est la version

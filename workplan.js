@@ -49,9 +49,10 @@ export function createWorkplan({ store, backends, flora, drive = null, concurren
   // vitrine, et ca evite de depenser 30 generations a l'aveugle.
   async function startSession({ mode, driveUrl, files, style, model, etab, nomEtab, destination, user }) {
     const backend = backends[mode] || backends.drive;
-    // Photos recuperees sur les reseaux : recadrage vitrine automatique
-    // (1500x750, photo entiere, bords vides), sans IA ni cout.
-    if (mode === 'links' && !style) style = { ...builtinStyles.recadrage, auto: true };
+    // Photos recuperees sur les reseaux, et contenu gerant : recadrage
+    // vitrine automatique (1500x750, photo entiere, bords vides), sans IA ni
+    // cout.
+    if ((mode === 'links' || mode === 'upload') && !style) style = { ...builtinStyles.recadrage, auto: true };
     // Destination par defaut selon l'entree : un lien Drive livre a cote de
     // ses originaux, un import sans dossier de depart livre dans
     // l'etablissement si on en connait un, sinon en zip.
@@ -548,7 +549,8 @@ export function createWorkplan({ store, backends, flora, drive = null, concurren
     // Photos recuperees sur les reseaux : meme recadrage automatique qu'a
     // l'import initial.
     const aRecadrer = nouvelles.filter((p) => p.kind === 'photo').map((p) => p.id);
-    if ((prov || (session.mode === 'links' ? 'social' : null)) === 'social' && aRecadrer.length) {
+    const provEffective = prov || (session.mode === 'links' ? 'social' : session.mode === 'upload' ? 'gerant' : null);
+    if ((provEffective === 'social' || provEffective === 'gerant') && aRecadrer.length) {
       await withSession(sessionId, (s) => { s.status = 'running'; });
       runBatch(sessionId, { style: { ...builtinStyles.recadrage, auto: true }, photoIds: aRecadrer })
         .catch((e) => console.warn('[recadrage]', msg(e)));

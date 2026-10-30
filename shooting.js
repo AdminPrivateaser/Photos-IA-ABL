@@ -1,7 +1,15 @@
-// Import d'un nouveau shooting (version ABL).
+// Depot de fichiers : nouveau shooting, ou contenu gerant (outil CX).
 //
-// ABL telecharge le zip du shooting depuis Shoootin et le depose dans
-// l'outil. L'outil :
+// Les deux acceptent un zip, des photos/videos, ou un melange des deux. Les
+// zips sont decompresses ici (inventaire()), fichier par fichier, sans
+// jamais charger tout le depot en memoire.
+//
+// Contenu gerant (type 'gerant') : les fichiers ouvrent une session de type
+// « fichiers deposes » ; le rangement dans « Contenu gérant / <date> » et le
+// recadrage automatique sont faits par workplan.js et rangement.js.
+//
+// Nouveau shooting (type 'shooting') : le zip vient en general de Shoootin.
+// L'outil :
 //   1. decompresse le zip (ou prend les photos deposees telles quelles) ;
 //   2. trouve le mois du shooting d'apres la date de prise de vue des photos
 //      (EXIF), a defaut le mois en cours ;
@@ -71,6 +79,41 @@ function moisDuShooting(dates) {
   return { nom: `${MOIS[m - 1]} ${a}`, source: 'date des photos' };
 }
 
+// Inventaire d'un depot : chaque media est { nom, mimetype, lire() }, lire()
+// rendant ses octets a la demande. Appeler fermer() une fois fini.
+// fichiers : [{ path (sur le volume), originalname }].
+export async function inventaire(fichiers) {
+  const medias = [];
+  const zips = [];
+  let ignores = 0;
+  try {
+    for (const f of fichiers) {
+      if (ext(f.originalname) === 'zip') {
+        const { zip, entrees } = await ouvrirZip(f.path);
+        zips.push(zip);
+        for (const e of entrees) {
+          const nom = path.basename(e.fileName);
+          medias.push({ nom, mimetype: MIME[ext(nom)] || 'application/octet-stream', lire: () => lireEntree(zip, e) });
+        }
+      } else if (IMAGES.has(ext(f.originalname)) || VIDEOS.has(ext(f.originalname))) {
+        const nom = path.basename(f.originalname);
+        medias.push({ nom, mimetype: MIME[ext(nom)] || 'application/octet-stream', lire: () => fs.readFile(f.path) });
+      } else {
+        ignores++;
+      }
+    }
+  } catch (e) {
+    for (const z of zips) try { z.close(); } catch {}
+    throw e;
+  }
+  medias.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }));
+  return { medias, ignores, fermer: () => { for (const z of zips) try { z.close(); } catch {} } };
+}
+
+// Forme attendue par workplan.startSession / addMedia (backend local).
+export const versFichiersSession = (medias) =>
+  medias.map((m) => ({ originalname: m.nom, mimetype: m.mimetype, lire: m.lire }));
+
 // Liste les fichiers medias d'un zip, sans les extraire.
 function ouvrirZip(chemin) {
   return new Promise((ok, ko) => {
@@ -115,14 +158,15 @@ export function createShootings({ drive, workplan, dir }) {
   }).catch(() => {});
 
   // fichiers : [{ path (sur le volume), originalname }] — un zip, ou des photos.
-  async function demarrer({ fichiers, etab, user, resolveModel }) {
+  // type : 'shooting' (defaut) ou 'gerant'.
+  async function demarrer({ fichiers, etab, user, resolveModel, type = 'shooting' }) {
     const id = randomUUID();
     const etat = {
       id, status: 'running', etape: 'Lecture des fichiers…', total: 0, done: 0,
       dossier: null, dossierUrl: null, sessionId: null, error: null, ignores: 0, deja: 0,
     };
     travaux.set(id, etat);
-    traiter(etat, { fichiers, etab, user, resolveModel })
+    (type === 'gerant' ? traiterGerant : traiter)(etat, { fichiers, etab, user, resolveModel })
       .catch((e) => { etat.status = 'error'; etat.error = String((e && e.message) || e); })
       .finally(async () => {
         for (const f of fichiers) await fs.rm(f.path, { force: true }).catch(() => {});
@@ -132,27 +176,41 @@ export function createShootings({ drive, workplan, dir }) {
     return etat;
   }
 
+  // Contenu gerant : session « fichiers deposes », comme un depot classique.
+  async function traiterGerant(etat, { fichiers, etab, user, resolveModel }) {
+    const inv = await inventaire(fichiers);
+    etat.ignores = inv.ignores;
+    try {
+      if (inv.medias.length === 0) throw new Error('Aucune photo ni vidéo trouvée dans ce que tu as déposé.');
+      etat.total = inv.medias.length;
+      etat.etape = 'Import des fichiers…';
+      const session = await workplan.startSession({
+        mode: 'upload',
+        files: versFichiersSession(inv.medias),
+        style: null,
+        model: resolveModel(),
+        etab,
+        nomEtab: etab.nom,
+        destination: 'etab',
+        user,
+      });
+      etat.done = etat.total;
+      etat.sessionId = session.id;
+      etat.status = 'done';
+      etat.etape = 'Terminé';
+    } finally {
+      inv.fermer();
+    }
+  }
+
   async function traiter(etat, { fichiers, etab, user, resolveModel }) {
     // 1. Inventaire : chaque media est une fonction qui rend ses octets, pour
     //    ne jamais charger tout le shooting en memoire d'un coup.
-    const medias = [];
-    const zips = [];
-    for (const f of fichiers) {
-      if (ext(f.originalname) === 'zip') {
-        const { zip, entrees } = await ouvrirZip(f.path);
-        zips.push(zip);
-        for (const e of entrees) {
-          medias.push({ nom: path.basename(e.fileName), lire: () => lireEntree(zip, e) });
-        }
-      } else if (IMAGES.has(ext(f.originalname)) || VIDEOS.has(ext(f.originalname))) {
-        medias.push({ nom: path.basename(f.originalname), lire: () => fs.readFile(f.path) });
-      } else {
-        etat.ignores++;
-      }
-    }
+    const inv = await inventaire(fichiers);
+    const medias = inv.medias;
+    etat.ignores = inv.ignores;
     try {
       if (medias.length === 0) throw new Error('Aucune photo ni vidéo trouvée dans ce que tu as déposé.');
-      medias.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }));
       etat.total = medias.length;
 
       // 2. Mois du shooting, d'apres les 15 premieres photos.
@@ -194,7 +252,7 @@ export function createShootings({ drive, workplan, dir }) {
         etat.done++;
       }
     } finally {
-      for (const z of zips) try { z.close(); } catch {}
+      inv.fermer();
     }
 
     // 5. Session de retouche sur ce dossier, comme en mode « Un dossier Drive ».
@@ -209,6 +267,9 @@ export function createShootings({ drive, workplan, dir }) {
       destination: 'source',
       user,
     });
+    // Marque la session : son suivi indique « Shooting déposé » plutôt
+    // que « Dossier Drive ».
+    await workplan.withSession(session.id, (s) => { s.origine = 'shooting'; }).catch(() => {});
     etat.sessionId = session.id;
     etat.status = 'done';
     etat.etape = 'Terminé';

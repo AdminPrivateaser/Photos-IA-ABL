@@ -184,7 +184,8 @@ export function createLocalBackend({ dir, drive, parentFolderId }) {
       for (const f of files) {
         const ext = (path.extname(f.originalname) || '.jpg').toLowerCase();
         const ref = randomUUID() + ext;
-        await write(session.id, 'source', ref, f.buffer);
+        // f.lire : fichier extrait d'un zip a la demande (voir shooting.js).
+        await write(session.id, 'source', ref, f.buffer || (await f.lire()));
         photos.push({ sourceRef: ref, sourceName: f.originalname, mimeType: f.mimetype });
       }
       return { source: { folderName: 'Import' }, etab: null, workRef: 'work', photos };
@@ -201,7 +202,8 @@ export function createLocalBackend({ dir, drive, parentFolderId }) {
       for (const f of files) {
         const ext = (path.extname(f.originalname) || '.jpg').toLowerCase();
         const ref = randomUUID() + ext;
-        await write(session.id, 'source', ref, f.buffer);
+        // f.lire : fichier extrait d'un zip a la demande (voir shooting.js).
+        await write(session.id, 'source', ref, f.buffer || (await f.lire()));
         photos.push({ sourceRef: ref, sourceName: f.originalname, mimeType: f.mimetype });
       }
       return photos;

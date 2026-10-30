@@ -95,6 +95,12 @@
     .fblist button:hover { background: #f6f4fe; }
     .fblist button + button { border-top: 1px solid var(--line); }
     .fbcount { font-size: 13px; padding: 9px 13px; border-radius: 10px; background: #f6f4fe; margin: 0 0 8px; }
+    .fingen { position: fixed; inset: 0; background: rgba(21,19,43,.35); display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+    .fingen.show { display: flex; }
+    .fingenbox { background: #fff; border-radius: 16px; padding: 26px 28px; max-width: 360px; width: 100%; text-align: center; box-shadow: 0 10px 40px rgba(21,19,43,.18); }
+    .fingenico { width: 46px; height: 46px; border-radius: 50%; background: #eaf7f1; color: #12694a; font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+    .fingenbox h3 { margin: 0 0 6px; font-size: 18px; }
+    .fingenbox p { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
     .chosen button { margin-left: auto; border: 0; background: none; color: #12694a; font-size: 12px; font-weight: 600; text-decoration: underline; }
     .dest { padding: 11px 13px; border-radius: 10px; background: #f1eefb; font-size: 12.5px; color: #3a2f7a; margin-bottom: 4px; }
     .dest code { font-family: ui-monospace, monospace; font-size: 12px; }
@@ -434,6 +440,16 @@
   <div id="grid"></div>
 </div>
 
+<!-- ================= Fin des générations ================= -->
+<div class="fingen" id="finGen" role="dialog" aria-live="polite" aria-labelledby="finGenTitre">
+  <div class="fingenbox">
+    <div class="fingenico">✓</div>
+    <h3 id="finGenTitre">Générations terminées</h3>
+    <p id="finGenTexte"></p>
+    <button class="validate" id="finGenOk" type="button">Voir les photos</button>
+  </div>
+</div>
+
 <!-- ================= Vue de détail ================= -->
 <div class="overlay" id="detail">
   <div class="dwrap">
@@ -507,7 +523,7 @@
     showErr(cible, m);
   }
 
-  const VERSION = 'v2.1-abl-shooting';
+  const VERSION = 'v2.2-abl';
 
   let shootFiles = []; // fichiers déposés pour « Un nouveau shooting »
   let tab = 'drive', droppedFiles = [], etab = null;
@@ -1213,13 +1229,70 @@
 
 
   // ---------- Plan de travail : sondage et rendu ----------
+  // ---------- Fin des générations : popup + onglet du navigateur ----------
+  // Suit chaque passage « en cours » d'une session. A la fin, si des
+  // retouches IA ont tourné ou si l'attente a été longue, on prévient : une
+  // fenêtre dans la page, et le titre de l'onglet change (il clignote si
+  // l'onglet n'est pas affiché) jusqu'à ce qu'on revienne sur la page.
+  const TITRE = document.title;
+  let suiviGen = null; // { id, t0, avant: Set des rendus déjà là }
+  let clignote = null;
+  const rendusDe = (s) => (s.photos || []).flatMap((p) => (p.renders || []).map((r) => ({ ...r, photoId: p.id })));
+  function observerGeneration(s) {
+    if (s.status === 'running') {
+      if (!suiviGen || suiviGen.id !== s.id) {
+        suiviGen = { id: s.id, t0: Date.now(), avant: new Set(rendusDe(s).map((r) => r.id)) };
+      }
+      return;
+    }
+    if (!suiviGen || suiviGen.id !== s.id) return;
+    const nouveaux = rendusDe(s).filter((r) => !suiviGen.avant.has(r.id));
+    const duree = Date.now() - suiviGen.t0;
+    // Lancement à peine parti : le serveur n'a pas encore marqué la session
+    // « en cours ». On attend le prochain passage plutôt que de conclure.
+    if (suiviGen.ia && !nouveaux.length && duree < 10000) return true;
+    const ia = suiviGen.ia || nouveaux.some((r) => r.kind === 'ai');
+    suiviGen = null;
+    if (!nouveaux.length || (!ia && duree < 15000)) return;
+    const ok = new Set(nouveaux.filter((r) => r.status === 'ok').map((r) => r.photoId)).size;
+    const ko = new Set(nouveaux.filter((r) => r.status !== 'ok').map((r) => r.photoId)).size;
+    signalerFin(ok, ko);
+  }
+  function signalerFin(ok, ko) {
+    $('finGenTexte').innerHTML = `<b>${ok}</b> photo${ok > 1 ? 's' : ''} prête${ok > 1 ? 's' : ''}`
+      + (ko ? ` · <span style="color:var(--err)"><b>${ko}</b> en échec</span>` : '');
+    $('finGen').classList.add('show');
+    const titre = ko ? `⚠ Terminé (${ko} échec${ko > 1 ? 's' : ''})` : '✓ Générations terminées';
+    document.title = `${titre} — ${TITRE}`;
+    clearInterval(clignote);
+    if (document.hidden) {
+      let bis = false;
+      clignote = setInterval(() => { bis = !bis; document.title = bis ? `🔔 ${titre}` : `${titre} — ${TITRE}`; }, 1000);
+    }
+  }
+  function fermerFin() {
+    $('finGen').classList.remove('show');
+    clearInterval(clignote);
+    document.title = TITRE;
+  }
+  $('finGenOk').addEventListener('click', fermerFin);
+  $('finGen').addEventListener('click', (e) => { if (e.target === $('finGen')) fermerFin(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && clignote) {
+      clearInterval(clignote);
+      clignote = null;
+      if ($('finGen').classList.contains('show')) document.title = `✓ Générations terminées — ${TITRE}`;
+    }
+  });
+
   function startPolling() {
     clearInterval(poll);
     const tick = async () => {
       try {
         session = await api('/api/sessions/' + sessionId);
+        const attente = observerGeneration(session);
         render();
-        if (session.status !== 'running' && session.status !== 'validating') clearInterval(poll);
+        if (session.status !== 'running' && session.status !== 'validating' && !attente) clearInterval(poll);
       } catch (e) { showErr('planErr', e.message); clearInterval(poll); }
     };
     poll = setInterval(tick, 2000);
@@ -2244,6 +2317,8 @@
         corps.prompt = txt; corps.promptLabel = $('rLabel').value.trim();
       } else corps.style = $('rStyle').value;
 
+      // Le suivi démarre au clic : même une génération très courte est signalée.
+      suiviGen = { id: session.id, t0: Date.now(), avant: new Set(rendusDe(session).map((r) => r.id)), ia: true };
       await api(`/api/sessions/${session.id}/rerun`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps),
       });
