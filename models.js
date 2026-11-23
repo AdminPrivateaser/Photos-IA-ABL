@@ -36,6 +36,9 @@ const MODEL_ALIASES = {
   'nano banana 2': 'i2i-gemini-3.1-flash-image',
   'nano banana': 'i2i-gemini-3.1-flash-image',
   'gemini 3 pro': 'i2i-gemini-3-pro',
+  'gpt image 2 6 sunburst': 'i2i-gpt-image-2-6-sunburst',
+  'gpt image 2 6 flare': 'i2i-gpt-image-2-6-flare',
+  'gpt image 2 5 sunburst': 'i2i-gpt-image-2-5-sunburst',
   'gpt image 2': 'i2i-gpt-image-2-i2i',
   'gpt image': 'i2i-openai-gpt-image-1',
 };

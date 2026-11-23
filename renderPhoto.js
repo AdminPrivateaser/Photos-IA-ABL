@@ -23,7 +23,11 @@ export async function renderPhoto({ sourceBuffer, style, model, from, flora, flo
   const render = newRender({
     promptLabel: style.label,
     promptText: style.prompt || null,
-    model: style.type === 'recadrage' ? null : model || style.model || null,
+    // Le modele fixe dans Notion (colonne « Modèle ») passe AVANT le modele par
+    // defaut : un prompt mis au point sur un modele precis (ex. Jour/Nuit sur
+    // GPT Image 2.6 Sunburst) tourne toujours sur ce modele. Sans modele dans
+    // Notion, c'est Nano Banana Pro qui s'applique, comme avant.
+    model: style.type === 'recadrage' ? null : style.model || model || null,
     from,
     kind: style.type === 'recadrage' ? 'recadrage' : 'ai',
   });

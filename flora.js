@@ -114,6 +114,43 @@ export function createFlora({ apiKey, workspaceId, projectId }) {
     return { [p.name]: RESOLUTION };
   }
 
+  // --- Reglages propres aux modeles GPT Image ---------------------------------
+  //
+  // Les prompts Jour/Nuit ont ete valides sur GPT Image 2.6 Sunburst avec
+  // Quality = High et Thinking = High. Comme pour la resolution, on n'envoie
+  // un reglage que si le modele le declare ET accepte la valeur : un nom de
+  // parametre invente ferait echouer la generation. Limite aux modeles GPT
+  // pour ne rien changer au comportement de Nano Banana.
+  const REGLAGES_GPT = [
+    { nom: /^quality$/i, valeur: 'high' },
+    { nom: /^(thinking|thinking_level|reasoning|reasoning_effort)$/i, valeur: 'high' },
+  ];
+
+  async function paramsGpt(modelId) {
+    if (!/gpt/i.test(String(modelId || ''))) return {};
+    const params = await parametresDuModele(modelId);
+    const out = {};
+    for (const r of REGLAGES_GPT) {
+      const p = params.find((x) => r.nom.test(x.name));
+      if (!p) continue;
+      const options = p.options || [];
+      if (options.length) {
+        const trouve = options.find((o) => String(o.value).toLowerCase() === r.valeur);
+        if (!trouve) {
+          console.warn(
+            `[flora] ${p.name}="${r.valeur}" non propose par ${modelId}. ` +
+              `Valeurs possibles : ${options.map((o) => o.value).join(', ')}.`,
+          );
+          continue;
+        }
+        out[p.name] = trouve.value;
+      } else {
+        out[p.name] = r.valeur;
+      }
+    }
+    return out;
+  }
+
   async function edit(assetUrl, { prompt, model, projectId: pid }) {
     const project_id = pid || projectId;
     const gen = await client.generations.create({
@@ -122,7 +159,12 @@ export function createFlora({ apiKey, workspaceId, projectId }) {
       model,
       workspace_id: workspaceId,
       project_id,
-      params: { image_urls: [assetUrl], ...(await paramsResolution(model)), ...extra },
+      params: {
+        image_urls: [assetUrl],
+        ...(await paramsResolution(model)),
+        ...(await paramsGpt(model)),
+        ...extra,
+      },
     });
     const output = await pollRun(gen.run_id, gen.poll_url, project_id);
     return { url: output.url, cost: gen.charged_cost || 0 };
