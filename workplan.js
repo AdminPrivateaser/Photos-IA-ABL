@@ -32,7 +32,22 @@ export const MIME = {
   m4v: 'video/x-m4v',
 };
 
-export function createWorkplan({ store, backends, flora, drive = null, concurrency = 4, socialParDate = false }) {
+export function createWorkplan({ store, backends, flora, drive = null, concurrency = 4, socialParDate = false, prechauffer = null }) {
+  // Prepare les vignettes d'un rendu tout juste genere, tant que ses octets
+  // sont encore en memoire. Sans ca, la premiere vignette demandee par
+  // l'interface obligeait le serveur a retelecharger le fichier depuis Drive
+  // puis a le redimensionner : l'image n'apparaissait que de longues
+  // secondes apres le message « Générations terminées ». Un echec ici n'est
+  // jamais bloquant : la vignette sera simplement calculee a la demande.
+  async function vignettes(sessionId, workFileId, buffer) {
+    if (!prechauffer || !workFileId || !buffer) return;
+    try {
+      await prechauffer(sessionId, workFileId, buffer);
+    } catch (e) {
+      console.warn('[workplan] Vignettes non preparees :', msg(e));
+    }
+  }
+
   const rangement = drive ? createRangement({ drive, store, backends, withSession, socialParDate }) : null;
   // Range les originaux d'un import (liens, fichiers deposes) en tache de
   // fond : un souci Drive ne doit pas bloquer l'ouverture du plan.
@@ -223,6 +238,7 @@ export function createWorkplan({ store, backends, flora, drive = null, concurren
             mimeType: render.mimeType,
             buffer: render.buffer,
           });
+          await vignettes(sessionId, render.workFileId, render.buffer);
         } catch (e) {
           render.status = 'error';
           render.error = 'Ecriture du rendu impossible : ' + msg(e);
@@ -423,6 +439,7 @@ export function createWorkplan({ store, backends, flora, drive = null, concurren
           mimeType: MIME[render.ext] || 'application/octet-stream',
           buffer: sortie,
         });
+        await vignettes(sessionId, render.workFileId, sortie);
         render.status = 'ok';
       } catch (e) {
         render.status = 'error';

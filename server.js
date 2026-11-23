@@ -68,7 +68,7 @@ const flora = createFlora({
 const drive = createDrive({ serviceAccountJson: config.googleServiceAccountJson });
 const store = createStore({ dir: appConfig.dataDir });
 const backends = createBackends({ drive, dir: appConfig.dataDir, parentFolderId: appConfig.parentFolderId });
-const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency, socialParDate: appConfig.socialParDate });
+const workplan = createWorkplan({ store, backends, flora, drive, concurrency: config.concurrency, socialParDate: appConfig.socialParDate, prechauffer: prechaufferVignettes });
 // Suivi dans le Google Sheet general, onglet « ABL ». Retoucheur : toujours
 // « ABL » (compte unique du prestataire).
 const tracker = createTracker({
@@ -639,6 +639,22 @@ function tailleDemandee(req) {
   if (req.query.full === '1') return null;
   const w = parseInt(req.query.w, 10);
   return TAILLES.has(w) ? w : 700;
+}
+
+// Vignettes d'un rendu tout juste genere, preparees a partir des octets deja
+// en memoire (voir workplan.js). Memes cles et meme compression que
+// serveImage : l'interface les trouve directement dans le cache, sans
+// aller-retour vers Drive.
+async function prechaufferVignettes(sessionId, workFileId, buffer) {
+  for (const w of TAILLES) {
+    const cle = `wrk:${sessionId}:${workFileId}:${w}`;
+    if (cacheGet(cle)) continue;
+    const buf = await sharp(buffer)
+      .resize(w, null, { withoutEnlargement: true })
+      .jpeg({ quality: w <= 240 ? 74 : 88 })
+      .toBuffer();
+    cacheSet(cle, buf);
+  }
 }
 
 // Le cache garde l'image DEJA redimensionnee, pas les octets bruts : sinon la
